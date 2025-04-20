@@ -2,6 +2,7 @@
 #include <iostream>
 #include <string>
 #include <sstream>
+#include <vector>
 
 #define YYSTYPE atributos
 
@@ -15,9 +16,20 @@ struct atributos
 	string traducao;
 };
 
+typedef struct 
+{
+	string name;
+	string tipo;
+	string label;
+} VARIAVEL;
+
+vector<VARIAVEL> tabelaSimbolos;
+
 int yylex(void);
 void yyerror(string);
 string gentempcode();
+bool verificar(string name);
+VARIAVEL buscar(string name);
 %}
 
 %token TK_NUM
@@ -73,6 +85,21 @@ E 			: '(' E ')'
 			{
 				$$ = $2;
 			}
+			|TK_TIPO_INT TK_ID
+			{
+				if(verificar($2.label)) {
+					yyerror("Variavel já declarada.\n");
+				}
+
+				VARIAVEL variavel;
+				variavel.name = $2.label;
+				variavel.tipo = "int";
+				variavel.label = gentempcode();
+				tabelaSimbolos.push_back(variavel);
+				
+				$$.label = "";
+				$$.traducao = "";
+			}
 			| E '+' E
 			{
 				$$.label = gentempcode();
@@ -97,6 +124,13 @@ E 			: '(' E ')'
 			}
 			| TK_ID '=' E
 			{
+				if(!verificar($1.label)) {
+					yyerror("Variavel nao foi declarada.");
+				}
+
+				VARIAVEL variavel;
+				variavel = buscar($1.label);
+				$1.label = variavel.label;
 				$$.traducao = $1.traducao + $3.traducao + "\t" + $1.label + " = " + $3.label + ";\n";
 			}
 			| TK_NUM
@@ -106,8 +140,15 @@ E 			: '(' E ')'
 			}
 			| TK_ID
 			{
-				$$.label = gentempcode();
-				$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
+				VARIAVEL variavel;
+
+				if(!verificar($1.label)) {
+					yyerror("Variavel nao foi declarada.");
+				}
+				
+				variavel = buscar($1.label);
+				$$.label = variavel.label;
+				$$.traducao = "";
 			}
 			;
 
@@ -136,4 +177,29 @@ void yyerror(string MSG)
 {
 	cout << MSG << endl;
 	exit (0);
-}				
+}
+
+bool verificar(string name)
+{
+	for(int i = 0; i < tabelaSimbolos.size(); i++) {
+		if(tabelaSimbolos[i].name == name) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+VARIAVEL buscar(string name)
+{
+	VARIAVEL variavel;
+
+	for(int i = 0; i < tabelaSimbolos.size(); i++) {
+		if(tabelaSimbolos[i].name == name) {
+			variavel = tabelaSimbolos[i];
+			return variavel;
+		}
+	}
+
+	return variavel;
+}

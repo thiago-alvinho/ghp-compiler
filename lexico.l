@@ -23,6 +23,8 @@ ID {LETRA}({LETRA}|{NUM})*
 
 "int"		{return TK_TIPO_INT;}
 
+"float"     {return TK_TIPO_FLOAT;}
+
 "var"       {}
 
 [(){}[\];,]	{ return *yytext; }
@@ -33,7 +35,7 @@ ID {LETRA}({LETRA}|{NUM})*
 
 {NUM}		{ yylval.label = yytext; return TK_NUM; }
 {ID}		{ yylval.label = yytext; return TK_ID; }
-
+{REAL}      { yylval.label = yytext; return TK_FLOAT;}
 .			{ *yytext; }
 
 %%

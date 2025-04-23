@@ -3,6 +3,7 @@
 #include <string>
 #include <sstream>
 #include <vector>
+#include <map>
 
 #define YYSTYPE atributos
 
@@ -14,6 +15,7 @@ struct atributos
 {
 	string label;
 	string traducao;
+	string tipo;
 };
 
 typedef struct 
@@ -24,16 +26,20 @@ typedef struct
 } VARIAVEL;
 
 vector<VARIAVEL> tabelaSimbolos;
+vector<string> declaracoes;
+
+map<string, map<string, string>> tipofinal;
 
 int yylex(void);
 void yyerror(string);
 string gentempcode();
 bool verificar(string name);
 VARIAVEL buscar(string name);
+void declarar(string tipo, string label);
 %}
 
-%token TK_NUM
-%token TK_MAIN TK_ID TK_TIPO_INT
+%token TK_NUM TK_FLOAT
+%token TK_MAIN TK_ID TK_TIPO_INT TK_TIPO_FLOAT
 %token TK_FIM TK_ERROR
 
 %start S
@@ -52,8 +58,8 @@ S 			: COMANDOS
 								"#include<stdio.h>\n"
 								"int main(void) {\n";
 
-				for (int i = 0; i < var_temp_qnt; i++) {
-					codigo += "\tint t" + to_string(i+1) + ";\n";
+				for (int i = 0; i < declaracoes.size(); i++) {
+					codigo += declaracoes[i];
 				}	
 
 				codigo += "\n" + $1.traducao;
@@ -96,6 +102,23 @@ E 			: '(' E ')'
 				variavel.tipo = "int";
 				variavel.label = gentempcode();
 				tabelaSimbolos.push_back(variavel);
+				declarar(variavel.tipo, variavel.label);
+				
+				$$.label = "";
+				$$.traducao = "";
+			}
+			|TK_TIPO_FLOAT TK_ID
+			{
+				if(verificar($2.label)) {
+					yyerror("Variavel já declarada.\n");
+				}
+
+				VARIAVEL variavel;
+				variavel.name = $2.label;
+				variavel.tipo = "float";
+				variavel.label = gentempcode();
+				tabelaSimbolos.push_back(variavel);
+				declarar(variavel.tipo, variavel.label);
 				
 				$$.label = "";
 				$$.traducao = "";
@@ -105,22 +128,32 @@ E 			: '(' E ')'
 				$$.label = gentempcode();
 				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + 
 					" = " + $1.label + " + " + $3.label + ";\n";
+				$$.tipo = tipofinal[$1.tipo][$3.tipo];
+				cout << "teste" + $1.tipo + $3.tipo << endl;
+				declarar($$.tipo, $$.label);
 			}
 			| E '-' E
 			{
 				$$.label = gentempcode();
 				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + 
 					" = " + $1.label + " - " + $3.label + ";\n";
+				$$.tipo = tipofinal[$1.tipo][$3.tipo];
+				cout << "teste" + tipofinal[$1.tipo][$3.tipo] << endl;
+				declarar($$.tipo, $$.label);
 			}
 			| E '*' E
 			{
 				$$.label = gentempcode();
 				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + " = " + $1.label + " * " + $3.label + ";\n";
+				$$.tipo = tipofinal[$1.tipo][$3.tipo];
+				declarar($$.tipo, $$.label);			
 			}
 			| E '/' E
 			{
 				$$.label = gentempcode();
 				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + " = " + $1.label + " / " + $3.label + ";\n";
+				$$.tipo = tipofinal[$1.tipo][$3.tipo];
+				declarar($$.tipo, $$.label);
 			}
 			| TK_ID '=' E
 			{
@@ -130,13 +163,23 @@ E 			: '(' E ')'
 
 				VARIAVEL variavel;
 				variavel = buscar($1.label);
+
 				$1.label = variavel.label;
 				$$.traducao = $1.traducao + $3.traducao + "\t" + $1.label + " = " + $3.label + ";\n";
+			}
+			|TK_FLOAT
+			{
+				$$.label = gentempcode();
+				$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
+				$$.tipo = "float";
+				declarar($$.tipo, $$.label);
 			}
 			| TK_NUM
 			{
 				$$.label = gentempcode();
 				$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
+				$$.tipo = "int";
+				declarar($$.tipo, $$.label);
 			}
 			| TK_ID
 			{
@@ -149,6 +192,7 @@ E 			: '(' E ')'
 				variavel = buscar($1.label);
 				$$.label = variavel.label;
 				$$.traducao = "";
+				$$.tipo = variavel.tipo;
 			}
 			;
 
@@ -167,6 +211,10 @@ string gentempcode()
 int main(int argc, char* argv[])
 {
 	var_temp_qnt = 0;
+	tipofinal["int"]["int"] = "int";
+	tipofinal["float"]["int"] = "float";
+	tipofinal["float"]["float"] = "float";
+	tipofinal["int"]["float"] = "float";
 
 	yyparse();
 
@@ -202,4 +250,8 @@ VARIAVEL buscar(string name)
 	}
 
 	return variavel;
+}
+
+void declarar(string tipo, string label) {
+	declaracoes.push_back("\t" + tipo + " " + label + ";\n");
 }

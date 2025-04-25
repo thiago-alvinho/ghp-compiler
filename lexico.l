@@ -12,6 +12,8 @@ NUM {DIGITO}+
 REAL {NUM}+("."{NUM}+)?
 CHAR \'({LETRA}|{NUM})\'
 ID {LETRA}({LETRA}|{NUM})*
+BOOL ("true"|"false")
+RELACIONAIS (">"|"<"|"<="|">="|"=="|"!=")
 
 %%
 
@@ -25,6 +27,10 @@ ID {LETRA}({LETRA}|{NUM})*
 
 "float"     {return TK_TIPO_FLOAT;}
 
+"char"      {return TK_TIPO_CHAR;}
+
+"bool"      {return TK_TIPO_BOOL;}
+
 "var"       {}
 
 [(){}[\];,]	{ return *yytext; }
@@ -33,9 +39,12 @@ ID {LETRA}({LETRA}|{NUM})*
 
 "="		    { return '='; }
 
-{NUM}		{ yylval.label = yytext; return TK_NUM; }
-{ID}		{ yylval.label = yytext; return TK_ID; }
-{REAL}      { yylval.label = yytext; return TK_FLOAT;}
-.			{ *yytext; }
+{RELACIONAIS} { yylval.label = yytext; return TK_RELACIONAL;}
+{BOOL}        { yylval.label = yytext; return TK_BOOL;}
+{NUM}		  { yylval.label = yytext; return TK_NUM;}
+{ID}		  { yylval.label = yytext; return TK_ID;}
+{REAL}        { yylval.label = yytext; return TK_FLOAT;}
+{CHAR}        { yylval.label = yytext; return TK_CHAR;}
+.			  { *yytext; }
 
 %%

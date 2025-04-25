@@ -1,2 +1,5 @@
-int a;
-a = (a+2)*3.0;
+char C;
+C = 'a';
+
+bool B;
+B = true;

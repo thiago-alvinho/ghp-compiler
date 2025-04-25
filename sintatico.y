@@ -38,8 +38,8 @@ VARIAVEL buscar(string name);
 void declarar(string tipo, string label);
 %}
 
-%token TK_NUM TK_FLOAT
-%token TK_MAIN TK_ID TK_TIPO_INT TK_TIPO_FLOAT
+%token TK_NUM TK_FLOAT TK_CHAR TK_BOOL TK_RELACIONAL
+%token TK_MAIN TK_ID TK_TIPO_INT TK_TIPO_FLOAT TK_TIPO_CHAR TK_TIPO_BOOL
 %token TK_FIM TK_ERROR
 
 %start S
@@ -123,6 +123,38 @@ E 			: '(' E ')'
 				$$.label = "";
 				$$.traducao = "";
 			}
+			|TK_TIPO_CHAR TK_ID
+			{
+				if(verificar($2.label)) {
+					yyerror("Variavel já declarada.\n");
+				}
+
+				VARIAVEL variavel;
+				variavel.name = $2.label;
+				variavel.tipo = "char";
+				variavel.label = gentempcode();
+				tabelaSimbolos.push_back(variavel);
+				declarar(variavel.tipo, variavel.label);
+				
+				$$.label = "";
+				$$.traducao = "";
+			}
+			|TK_TIPO_BOOL TK_ID
+			{
+				if(verificar($2.label)) {
+					yyerror("Variavel já declarada.\n");
+				}
+
+				VARIAVEL variavel;
+				variavel.name = $2.label;
+				variavel.tipo = "int";
+				variavel.label = gentempcode();
+				tabelaSimbolos.push_back(variavel);
+				declarar(variavel.tipo, variavel.label);
+				
+				$$.label = "";
+				$$.traducao = "";
+			}
 			| E '+' E
 			{
 				$$.label = gentempcode();
@@ -193,6 +225,25 @@ E 			: '(' E ')'
 				$$.label = variavel.label;
 				$$.traducao = "";
 				$$.tipo = variavel.tipo;
+			}
+			| TK_CHAR
+			{
+
+				$$.traducao = "";
+				$$.tipo = "char";
+				$$.label = $1.label;
+			}
+			| TK_BOOL
+			{
+				if($1.label == "true") {
+					$1.label = "1";
+				} else {
+					$1.label = "0";
+				}
+
+				$$.label = $1.label;
+				$$.traducao = "";
+				$$.tipo = "bool";
 			}
 			;
 

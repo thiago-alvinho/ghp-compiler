@@ -322,50 +322,50 @@ E 			: '(' E ')'
 				$$.traducao = "";
 				$$.tipo = "bool";
 			}
-            | E TK_RELACIONAL E
-            {
-                $$.label = gentempcode();
-                $$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + " = " + $1.label + " " + $2.label + " " + $3.label + ";\n";
-                $$.tipo = "int";
-                declarar($$.tipo, $$.label);
-            }
-            | E TK_ORLOGIC E
-            {
-                $$.label = gentempcode();
-                $$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + " = " + $1.label + " " + $2.label + " " + $3.label + ";\n";
-                $$.tipo = "int";
-                declarar($$.tipo, $$.label);
-            }
-            | E TK_ANDLOGIC E
-            {
-                $$.label = gentempcode();
-                $$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + " = " + $1.label + " " + $2.label + " " + $3.label + ";\n";
-                $$.tipo = "int";
-                declarar($$.tipo, $$.label);
-            }
-            | TK_NOLOGIC E
-            {
-                $$.label = gentempcode();
-                $$.traducao = $2.traducao + "\t" + $$.label + " = !" + $2.label +  ";\n";
-                $$.tipo = "int";
-                declarar($$.tipo, $$.label);
-            }
-			| TK_CAST E
-			{
+            		| E TK_RELACIONAL E
+            		{
+                		$$.label = gentempcode();
+               			$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + " = " + $1.label + " " + $2.label + " " + $3.label + ";\n";
+                		$$.tipo = "int";
+                		declarar($$.tipo, $$.label);
+            		}
+            		| E TK_ORLOGIC E
+            		{
+               			$$.label = gentempcode();
+                		$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + " = " + $1.label + " " + $2.label + " " + $3.label + ";\n";
+                		$$.tipo = "int";
+                		declarar($$.tipo, $$.label);
+            		}
+            		| E TK_ANDLOGIC E
+            		{
+               			$$.label = gentempcode();
+                		$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + " = " + $1.label + " " + $2.label + " " + $3.label + ";\n";
+                		$$.tipo = "int";
+                		declarar($$.tipo, $$.label);
+            		}
+            		| TK_NOLOGIC E
+            		{
+		                $$.label = gentempcode();
+                		$$.traducao = $2.traducao + "\t" + $$.label + " = !" + $2.label +  ";\n";
+                		$$.tipo = "int";
+                		declarar($$.tipo, $$.label);
+            		}
+	    		| TK_CAST E
+	    		{
 				std::string temp1 = gentempcode();
-    			std::string temp2 = gentempcode();
+    				std::string temp2 = gentempcode();
 
-    			declarar($2.tipo, temp1);
-    			declarar(pegarTipoCast($1.label), temp2);
+    				declarar($2.tipo, temp1);
+    				declarar(pegarTipoCast($1.label), temp2);
 
-    			$$.traducao = $2.traducao +
-                  	"\t" + temp1 + " = " + $2.label + ";\n" +
-                  	"\t" + temp2 + " = " + "(" +pegarTipoCast($1.label)+ ")" + temp1 + ";\n";
+    				$$.traducao = $2.traducao +
+                  			"\t" + temp1 + " = " + $2.label + ";\n" +
+                  			"\t" + temp2 + " = " + "(" +pegarTipoCast($1.label)+ ")" + temp1 + ";\n";
 
-    			$$.label = temp2;
-    			$$.tipo = pegarTipoCast($1.label);
-			}
-			;
+    				$$.label = temp2;
+    				$$.tipo = pegarTipoCast($1.label);
+	     		}
+		     ;
 
 %%
 

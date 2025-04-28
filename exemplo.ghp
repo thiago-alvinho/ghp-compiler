@@ -1,5 +1,3 @@
-char C;
-C = 'a';
-
-bool B;
-B = true;
+int I;
+float F;
+I = (int) F;

@@ -36,14 +36,19 @@ string gentempcode();
 bool verificar(string name);
 VARIAVEL buscar(string name);
 void declarar(string tipo, string label);
+string pegarTipoCast(string label);
 %}
 
-%token TK_NUM TK_FLOAT TK_CHAR TK_BOOL TK_RELACIONAL
+%token TK_NUM TK_FLOAT TK_CHAR TK_BOOL TK_RELACIONAL TK_ORLOGIC TK_ANDLOGIC TK_NOLOGIC TK_CAST
 %token TK_MAIN TK_ID TK_TIPO_INT TK_TIPO_FLOAT TK_TIPO_CHAR TK_TIPO_BOOL
 %token TK_FIM TK_ERROR
 
 %start S
 
+%left TK_ORLOGIC
+%left TK_ANDLOGIC
+%left TK_NOLOGIC
+%left TK_RELACIONAL
 %left '+' '-'
 %left '*' '/'
 %left '(' ')'
@@ -55,7 +60,7 @@ S 			: COMANDOS
 				string codigo = "/*Compilador GHP*/\n"
 								"#include <iostream>\n"
 								"#include<string.h>\n"
-								"#include<stdio.h>\n"
+								"#include<stdio.h>\n\n"
 								"int main(void) {\n";
 
 				for (int i = 0; i < declaracoes.size(); i++) {
@@ -64,7 +69,7 @@ S 			: COMANDOS
 
 				codigo += "\n" + $1.traducao;
 								
-				codigo += 	"\treturn 0;"
+				codigo += 	"\n\treturn 0;"
 							"\n}";
 
 				cout << codigo << endl;
@@ -157,35 +162,107 @@ E 			: '(' E ')'
 			}
 			| E '+' E
 			{
-				$$.label = gentempcode();
-				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + 
-					" = " + $1.label + " + " + $3.label + ";\n";
-				$$.tipo = tipofinal[$1.tipo][$3.tipo];
-				cout << "teste" + $1.tipo + $3.tipo << endl;
-				declarar($$.tipo, $$.label);
+				std::string traducaoTemp = "";
+    			if ($1.tipo != $3.tipo) {
+        			if ($1.tipo == "int" && $3.tipo == "float") {
+            			$$.label = gentempcode();
+            			declarar("float", $$.label);
+            			traducaoTemp += "\t" + $$.label + " = (float)" + $1.label + ";\n";
+            			$1.label = $$.label;
+						$1.tipo = "float";
+       				} else if ($1.tipo == "float" && $3.tipo == "int") {
+						$$.label = gentempcode();
+            			declarar("float", $$.label);
+            			traducaoTemp += "\t" + $$.label + " = (float)" + $3.label + ";\n";
+            			$3.label = $$.label;
+            			$3.tipo = "float";
+        			}
+    			}
+    			$$.label = gentempcode();
+    			$$.tipo = tipofinal[$1.tipo][$3.tipo];
+
+    			$$.traducao = $1.traducao + $3.traducao + traducaoTemp +
+                  	"\t" + $$.label + " = " + $1.label + " + " + $3.label + ";\n";
+
+    			declarar($$.tipo, $$.label);
 			}
 			| E '-' E
 			{
-				$$.label = gentempcode();
-				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + 
-					" = " + $1.label + " - " + $3.label + ";\n";
-				$$.tipo = tipofinal[$1.tipo][$3.tipo];
-				cout << "teste" + tipofinal[$1.tipo][$3.tipo] << endl;
-				declarar($$.tipo, $$.label);
+				std::string traducaoTemp = "";
+    			if ($1.tipo != $3.tipo) {
+        			if ($1.tipo == "int" && $3.tipo == "float") {
+            			$$.label = gentempcode();
+            			declarar("float", $$.label);
+            			traducaoTemp += "\t" + $$.label + " = (float)" + $1.label + ";\n";
+            			$1.label = $$.label;
+						$1.tipo = "float";
+       				} else if ($1.tipo == "float" && $3.tipo == "int") {
+						$$.label = gentempcode();
+            			declarar("float", $$.label);
+            			traducaoTemp += "\t" + $$.label + " = (float)" + $3.label + ";\n";
+            			$3.label = $$.label;
+            			$3.tipo = "float";
+        			}
+    			}
+    			$$.label = gentempcode();
+    			$$.tipo = tipofinal[$1.tipo][$3.tipo];
+
+    			$$.traducao = $1.traducao + $3.traducao + traducaoTemp +
+                  	"\t" + $$.label + " = " + $1.label + " - " + $3.label + ";\n";
+
+    			declarar($$.tipo, $$.label);
 			}
 			| E '*' E
 			{
-				$$.label = gentempcode();
-				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + " = " + $1.label + " * " + $3.label + ";\n";
-				$$.tipo = tipofinal[$1.tipo][$3.tipo];
-				declarar($$.tipo, $$.label);			
+				std::string traducaoTemp = "";
+    			if ($1.tipo != $3.tipo) {
+        			if ($1.tipo == "int" && $3.tipo == "float") {
+            			$$.label = gentempcode();
+            			declarar("float", $$.label);
+            			traducaoTemp += "\t" + $$.label + " = (float)" + $1.label + ";\n";
+            			$1.label = $$.label;
+						$1.tipo = "float";
+       				} else if ($1.tipo == "float" && $3.tipo == "int") {
+						$$.label = gentempcode();
+            			declarar("float", $$.label);
+            			traducaoTemp += "\t" + $$.label + " = (float)" + $3.label + ";\n";
+            			$3.label = $$.label;
+            			$3.tipo = "float";
+        			}
+    			}
+    			$$.label = gentempcode();
+    			$$.tipo = tipofinal[$1.tipo][$3.tipo];
+
+    			$$.traducao = $1.traducao + $3.traducao + traducaoTemp +
+                  	"\t" + $$.label + " = " + $1.label + " * " + $3.label + ";\n";
+
+    			declarar($$.tipo, $$.label);			
 			}
 			| E '/' E
 			{
-				$$.label = gentempcode();
-				$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + " = " + $1.label + " / " + $3.label + ";\n";
-				$$.tipo = tipofinal[$1.tipo][$3.tipo];
-				declarar($$.tipo, $$.label);
+				std::string traducaoTemp = "";
+    			if ($1.tipo != $3.tipo) {
+        			if ($1.tipo == "int" && $3.tipo == "float") {
+            			$$.label = gentempcode();
+            			declarar("float", $$.label);
+            			traducaoTemp += "\t" + $$.label + " = (float)" + $1.label + ";\n";
+            			$1.label = $$.label;
+						$1.tipo = "float";
+       				} else if ($1.tipo == "float" && $3.tipo == "int") {
+						$$.label = gentempcode();
+            			declarar("float", $$.label);
+            			traducaoTemp += "\t" + $$.label + " = (float)" + $3.label + ";\n";
+            			$3.label = $$.label;
+            			$3.tipo = "float";
+        			}
+    			}
+    			$$.label = gentempcode();
+    			$$.tipo = tipofinal[$1.tipo][$3.tipo];
+
+    			$$.traducao = $1.traducao + $3.traducao + traducaoTemp +
+                  	"\t" + $$.label + " = " + $1.label + " / " + $3.label + ";\n";
+
+    			declarar($$.tipo, $$.label);
 			}
 			| TK_ID '=' E
 			{
@@ -245,7 +322,50 @@ E 			: '(' E ')'
 				$$.traducao = "";
 				$$.tipo = "bool";
 			}
-			;
+            		| E TK_RELACIONAL E
+            		{
+                		$$.label = gentempcode();
+               			$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + " = " + $1.label + " " + $2.label + " " + $3.label + ";\n";
+                		$$.tipo = "int";
+                		declarar($$.tipo, $$.label);
+            		}
+            		| E TK_ORLOGIC E
+            		{
+               			$$.label = gentempcode();
+                		$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + " = " + $1.label + " " + $2.label + " " + $3.label + ";\n";
+                		$$.tipo = "int";
+                		declarar($$.tipo, $$.label);
+            		}
+            		| E TK_ANDLOGIC E
+            		{
+               			$$.label = gentempcode();
+                		$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + " = " + $1.label + " " + $2.label + " " + $3.label + ";\n";
+                		$$.tipo = "int";
+                		declarar($$.tipo, $$.label);
+            		}
+            		| TK_NOLOGIC E
+            		{
+		                $$.label = gentempcode();
+                		$$.traducao = $2.traducao + "\t" + $$.label + " = !" + $2.label +  ";\n";
+                		$$.tipo = "int";
+                		declarar($$.tipo, $$.label);
+            		}
+	    		| TK_CAST E
+	    		{
+				std::string temp1 = gentempcode();
+    				std::string temp2 = gentempcode();
+
+    				declarar($2.tipo, temp1);
+    				declarar(pegarTipoCast($1.label), temp2);
+
+    				$$.traducao = $2.traducao +
+                  			"\t" + temp1 + " = " + $2.label + ";\n" +
+                  			"\t" + temp2 + " = " + "(" +pegarTipoCast($1.label)+ ")" + temp1 + ";\n";
+
+    				$$.label = temp2;
+    				$$.tipo = pegarTipoCast($1.label);
+	     		}
+		     ;
 
 %%
 
@@ -305,4 +425,13 @@ VARIAVEL buscar(string name)
 
 void declarar(string tipo, string label) {
 	declaracoes.push_back("\t" + tipo + " " + label + ";\n");
+}
+
+string pegarTipoCast(string label) {
+    if (label == "(int)") return "int";
+	if (label == "(float)") return "float";
+	if (label == "(bool)") return "bool";
+	if (label == "(char)") return "char";
+    yyerror("Tipo nao existente.");
+    return "";
 }

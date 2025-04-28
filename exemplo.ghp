@@ -1,3 +1,2 @@
-int I;
-float F;
-I = (int) F;
+int i;
+i = 2.5+2;

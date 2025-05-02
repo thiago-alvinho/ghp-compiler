@@ -215,7 +215,6 @@ E 			: '(' E ')'
 				$1.label = variavel.label;
 
 				if ($1.tipo != $3.tipo ) {
-				cout << "entrou aqui" + $1.tipo + $3.tipo << endl;
 				traducaoTemp = cast_implicito(&$$, &$1, &$3, "atribuicao");
 				}
 

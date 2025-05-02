@@ -43,7 +43,12 @@ CAST ("(float)"|"(int)"|"(bool)"|"(char)")
     
 "="		    { return '='; }
 
-{CAST}        { yylval.label = yytext; return TK_CAST;}
+{CAST}        { yylval.label = yytext; 
+               if(yylval.label == "(float)") yylval.tipo = "float";
+               if(yylval.label == "(int)") yylval.tipo = "int";
+               if(yylval.label == "(char)") yylval.tipo = "char";
+               if(yylval.label == "(bool)") yylval.tipo = "int" ;
+               return TK_CAST;}
 {ORLOGIC}     { yylval.label = yytext; return TK_ORLOGIC;}
 {ANDLOGIC}    { yylval.label = yytext; return TK_ANDLOGIC;}  
 {NOLOGIC}     { yylval.label = yytext; return TK_NOLOGIC;} 

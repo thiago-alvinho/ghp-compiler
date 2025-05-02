@@ -309,12 +309,12 @@ E 			: '(' E ')'
     			string temp2 = gentempcode();
 
     			declarar($2.tipo, temp1);
-    			declarar(pegarTipoCast($1.label), temp2);
+    			declarar($1.tipo, temp2);
 
-    			$$.traducao = $2.traducao +	"\t" + temp1 + " = " + $2.label + ";\n" +"\t" + temp2 + " = " + "(" +pegarTipoCast($1.label)+ ")" + temp1 + ";\n";
+    			$$.traducao = $2.traducao +	"\t" + temp1 + " = " + $2.label + ";\n" +"\t" + temp2 + " = " + "(" + $1.tipo + ")" + temp1 + ";\n";
 
     			$$.label = temp2;
-    			$$.tipo = pegarTipoCast($1.label);
+    			$$.tipo = $1.tipo;
 	    	}
 		    ;
 

@@ -149,7 +149,8 @@ E 			: '(' E ')'
 			}
 			| E '+' E
 			{
-    			
+    			traducaoTemp = "";
+
 				if ($1.tipo != $3.tipo ) {
 				traducaoTemp = cast_implicito(&$$, &$1, &$3, "operacao");
 				}
@@ -164,6 +165,8 @@ E 			: '(' E ')'
 			}
 			| E '-' E
 			{
+				traducaoTemp = "";
+				
 				if ($1.tipo != $3.tipo ) {
 				traducaoTemp = cast_implicito(&$$, &$1, &$3, "operacao");
 				}
@@ -178,6 +181,8 @@ E 			: '(' E ')'
 			}
 			| E '*' E
 			{
+				traducaoTemp = "";
+
 				if ($1.tipo != $3.tipo ) {
 				traducaoTemp = cast_implicito(&$$, &$1, &$3, "operacao");
 				}
@@ -192,7 +197,8 @@ E 			: '(' E ')'
 			}
 			| E '/' E
 			{
-				
+				traducaoTemp = "";
+
 				if ($1.tipo != $3.tipo ) {
 				traducaoTemp = cast_implicito(&$$, &$1, &$3, "operacao");
 				}
@@ -205,6 +211,8 @@ E 			: '(' E ')'
 			}
 			| TK_ID '=' E
 			{
+				traducaoTemp = "";
+
 				if(!verificar($1.label)) {
 					yyerror("Variavel nao foi declarada.");
 				}

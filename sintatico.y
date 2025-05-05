@@ -24,6 +24,7 @@ typedef struct
 	string name;
 	string tipo;
 	string label;
+	bool tipado;
 } VARIAVEL;
 
 vector<VARIAVEL> tabelaSimbolos;
@@ -37,13 +38,14 @@ string gentempcode();
 bool verificar(string name);
 VARIAVEL buscar(string name);
 void declarar(string tipo, string label);
-string pegarTipoCast(string label);
 VARIAVEL criar(string tipo, string label);
 string cast_implicito(atributos* no1, atributos* no2, atributos* no3, string tipo);
+void atualizar(string tipo, string name);
+
 %}
 
-%token TK_NUM TK_FLOAT TK_CHAR TK_BOOL TK_RELACIONAL TK_ORLOGIC TK_ANDLOGIC TK_NOLOGIC TK_CAST
-%token TK_MAIN TK_ID TK_TIPO_INT TK_TIPO_FLOAT TK_TIPO_CHAR TK_TIPO_BOOL
+%token TK_NUM TK_FLOAT TK_CHAR TK_BOOL TK_RELACIONAL TK_ORLOGIC TK_ANDLOGIC TK_NOLOGIC TK_CAST TK_VAR
+%token TK_MAIN TK_ID TK_TIPO_INT 
 %token TK_FIM TK_ERROR
 
 %start S
@@ -99,64 +101,31 @@ E 			: '(' E ')'
 			{
 				$$ = $2;
 			}
-			|TK_TIPO_INT TK_ID
+			|TK_VAR TK_ID
 			{
 				if(verificar($2.label)) {
 					yyerror("Variavel já declarada.\n");
 				}
 
-				VARIAVEL variavel = criar("int", $2.label);
-				declarar(variavel.tipo, variavel.label);
-				
-				$$.label = "";
-				$$.traducao = "";
-			}
-			|TK_TIPO_FLOAT TK_ID
-			{
-				if(verificar($2.label)) {
-					yyerror("Variavel já declarada.\n");
-				}
+				VARIAVEL variavel = criar("", $2.label);
 
-				VARIAVEL variavel = criar("float", $2.label);
-				declarar(variavel.tipo, variavel.label);
-				
 				$$.label = "";
 				$$.traducao = "";
-			}
-			|TK_TIPO_CHAR TK_ID
-			{
-				if(verificar($2.label)) {
-					yyerror("Variavel já declarada.\n");
-				}
+				$$.tipo = "";
 
-				VARIAVEL variavel = criar("char", $2.label);
-				declarar(variavel.tipo, variavel.label);
-				
-				$$.label = "";
-				$$.traducao = "";
-			}
-			|TK_TIPO_BOOL TK_ID
-			{
-				if(verificar($2.label)) {
-					yyerror("Variavel já declarada.\n");
-				}
-
-				VARIAVEL variavel = criar("int", $2.label);
-				declarar(variavel.tipo, variavel.label);
-				
-				$$.label = "";
-				$$.traducao = "";
 			}
 			| E '+' E
 			{
     			traducaoTemp = "";
 
-				if ($1.tipo != $3.tipo ) {
+				if (($1.tipo == "float" && $3.tipo == "int") || ($1.tipo == "int" && $3.tipo == "float") ) {
 				traducaoTemp = cast_implicito(&$$, &$1, &$3, "operacao");
 				}
 
     			$$.label = gentempcode();
     			$$.tipo = tipofinal[$1.tipo][$3.tipo];
+
+				if($$.tipo == "erro") yyerror("Operação com tipos inválidos");
 
     			$$.traducao = $1.traducao + $3.traducao + traducaoTemp +
                   	"\t" + $$.label + " = " + $1.label + " + " + $3.label + ";\n";
@@ -167,12 +136,14 @@ E 			: '(' E ')'
 			{
 				traducaoTemp = "";
 				
-				if ($1.tipo != $3.tipo ) {
+				if (($1.tipo == "float" && $3.tipo == "int") || ($1.tipo == "int" && $3.tipo == "float") ) {
 				traducaoTemp = cast_implicito(&$$, &$1, &$3, "operacao");
 				}
 				
     			$$.label = gentempcode();
     			$$.tipo = tipofinal[$1.tipo][$3.tipo];
+
+				if($$.tipo == "erro") yyerror("Operação com tipos inválidos");
 
     			$$.traducao = $1.traducao + $3.traducao + traducaoTemp +
                   	"\t" + $$.label + " = " + $1.label + " - " + $3.label + ";\n";
@@ -183,12 +154,14 @@ E 			: '(' E ')'
 			{
 				traducaoTemp = "";
 
-				if ($1.tipo != $3.tipo ) {
+				if (($1.tipo == "float" && $3.tipo == "int") || ($1.tipo == "int" && $3.tipo == "float") ) {
 				traducaoTemp = cast_implicito(&$$, &$1, &$3, "operacao");
 				}
 
     			$$.label = gentempcode();
     			$$.tipo = tipofinal[$1.tipo][$3.tipo];
+
+				if($$.tipo == "erro") yyerror("Operação com tipos inválidos");
 
     			$$.traducao = $1.traducao + $3.traducao + traducaoTemp +
                   	"\t" + $$.label + " = " + $1.label + " * " + $3.label + ";\n";
@@ -199,12 +172,15 @@ E 			: '(' E ')'
 			{
 				traducaoTemp = "";
 
-				if ($1.tipo != $3.tipo ) {
+				if (($1.tipo == "float" && $3.tipo == "int") || ($1.tipo == "int" && $3.tipo == "float") ) {
 				traducaoTemp = cast_implicito(&$$, &$1, &$3, "operacao");
 				}
 
 				$$.label = gentempcode();
     			$$.tipo = tipofinal[$1.tipo][$3.tipo];
+				
+				if($$.tipo == "erro") yyerror("Operação com tipos inválidos");
+
     			$$.traducao = $1.traducao + $3.traducao + traducaoTemp + "\t" + $$.label + " = " + $1.label + " / " + $3.label + ";\n";
 
     			declarar($$.tipo, $$.label);
@@ -219,10 +195,17 @@ E 			: '(' E ')'
 
 				VARIAVEL variavel;
 				variavel = buscar($1.label);
+
+				if(variavel.tipado == false) {
+					atualizar($3.tipo, $1.label);
+					declarar($3.tipo, variavel.label);
+					variavel.tipo = $3.tipo;
+				}
+
 				$1.tipo = variavel.tipo;
 				$1.label = variavel.label;
 
-				if ($1.tipo != $3.tipo ) {
+				if (($1.tipo == "float" && $3.tipo == "int") || ($1.tipo == "int" && $3.tipo == "float") ) {
 				traducaoTemp = cast_implicito(&$$, &$1, &$3, "atribuicao");
 				}
 
@@ -273,7 +256,7 @@ E 			: '(' E ')'
 
 				$$.label = $1.label;
 				$$.traducao = "";
-				$$.tipo = "bool";
+				$$.tipo = "int";
 			}
             | E TK_RELACIONAL E
     		{
@@ -338,6 +321,14 @@ int main(int argc, char* argv[])
 	tipofinal["float"]["int"] = "float";
 	tipofinal["float"]["float"] = "float";
 	tipofinal["int"]["float"] = "float";
+	tipofinal["char"]["int"] = "char";
+	tipofinal["int"]["char"] = "char";
+	tipofinal["float"]["char"] = "erro";
+	tipofinal["char"]["float"] = "erro";
+	tipofinal["bool"]["char"] = "erro";
+	tipofinal["char"]["bool"] = "erro";
+	tipofinal["bool"]["float"] = "erro";
+	tipofinal["float"]["bool"] = "erro";
 
 	yyparse();
 
@@ -356,6 +347,7 @@ VARIAVEL criar(string tipo, string label)
 	variavel.tipo = tipo;
 	variavel.name = label;
 	variavel.label = gentempcode();
+	variavel.tipado = false;
 	tabelaSimbolos.push_back(variavel);
 
 	return variavel;
@@ -429,11 +421,13 @@ string cast_implicito(atributos* no1, atributos* no2, atributos* no3, string tip
 
 	return traducaoTemp;
 }
-string pegarTipoCast(string label) {
-    if (label == "(int)") return "int";
-	if (label == "(float)") return "float";
-	if (label == "(bool)") return "bool";
-	if (label == "(char)") return "char";
-    yyerror("Tipo nao existente.");
-    return "";
+
+void atualizar(string tipo, string name) {
+
+		for(int i = 0; i < tabelaSimbolos.size(); i++) {
+		if(tabelaSimbolos[i].name == name) {
+			tabelaSimbolos[i].tipo = tipo;
+			tabelaSimbolos[i].tipado = true;
+		}
+	}
 }

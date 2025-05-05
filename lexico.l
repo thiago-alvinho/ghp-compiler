@@ -29,13 +29,7 @@ CAST ("(float)"|"(int)"|"(bool)"|"(char)")
     
 "int"		{return TK_TIPO_INT;}
     
-"float"     {return TK_TIPO_FLOAT;}
-    
-"char"      {return TK_TIPO_CHAR;}
-    
-"bool"      {return TK_TIPO_BOOL;}
-    
-"var"       {}
+"var"       {return TK_VAR;}
     
 [(){}[\];,]	{ return *yytext; }
     
@@ -48,7 +42,8 @@ CAST ("(float)"|"(int)"|"(bool)"|"(char)")
                if(yylval.label == "(int)") yylval.tipo = "int";
                if(yylval.label == "(char)") yylval.tipo = "char";
                if(yylval.label == "(bool)") yylval.tipo = "int" ;
-               return TK_CAST;}
+               return TK_CAST;} 
+
 {ORLOGIC}     { yylval.label = yytext; return TK_ORLOGIC;}
 {ANDLOGIC}    { yylval.label = yytext; return TK_ANDLOGIC;}  
 {NOLOGIC}     { yylval.label = yytext; return TK_NOLOGIC;} 

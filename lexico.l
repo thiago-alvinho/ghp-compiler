@@ -29,8 +29,6 @@ CAST ("(float)"|"(int)"|"(bool)"|"(char)")
 
 "main"		{return TK_MAIN;}
     
-"int"		{return TK_TIPO_INT;}
-    
 "var"       {return TK_VAR;}
     
 [(){}[\];,]	{ return *yytext; }

@@ -45,7 +45,7 @@ void atualizar(string tipo, string name);
 %}
 
 %token TK_NUM TK_FLOAT TK_CHAR TK_BOOL TK_RELACIONAL TK_ORLOGIC TK_ANDLOGIC TK_NOLOGIC TK_CAST TK_VAR 
-%token TK_MAIN TK_DEF TK_ID TK_TIPO_INT 
+%token TK_MAIN TK_DEF TK_ID 
 %token TK_FIM TK_ERROR
 
 %start S
@@ -239,9 +239,10 @@ E 			: '(' E ')'
 			| TK_CHAR
 			{
 
-				$$.traducao = "";
+				$$.label = gentempcode();
+				$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
 				$$.tipo = "char";
-				$$.label = $1.label;
+				declarar($$.tipo, $$.label);
 			}
 			| TK_BOOL
 			{

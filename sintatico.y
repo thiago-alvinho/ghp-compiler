@@ -56,7 +56,7 @@ void atualizar(string tipo, string name);
 %left TK_RELACIONAL
 %left '+' '-'
 %left '*' '/'
-%left '(' ')'
+%left '(' ')' TK_CAST
 
 %%
 
@@ -66,7 +66,7 @@ S 			:TK_DEF TK_MAIN BLOCO
 								"#include <iostream>\n"
 								"#include<string.h>\n"
 								"#include<stdio.h>\n\n"
-								"def main{\n";
+								"int main(void) {\n";
 
 				for (int i = 0; i < declaracoes.size(); i++) {
 					codigo += declaracoes[i];
@@ -93,9 +93,38 @@ COMANDOS	: COMANDO COMANDOS
 			}
 			;
 
-COMANDO 	: E ';'
+COMANDO 	: R ';'
 			{
 				$$ = $1;
+			}
+			;
+R 			: E
+			| TK_ID '=' E
+			{
+				traducaoTemp = "";
+
+				if(!verificar($1.label)) {
+					yyerror("Variavel nao foi declarada.");
+				}
+
+				VARIAVEL variavel;
+				variavel = buscar($1.label);
+
+				if(variavel.tipado == false) {
+					atualizar($3.tipo, $1.label);
+					declarar($3.tipo, variavel.label);
+					variavel.tipo = $3.tipo;
+				}
+
+				$1.tipo = variavel.tipo;
+				$1.label = variavel.label;
+
+				if(tipofinal[$1.tipo][$3.tipo] == "erro") yyerror("Operação com tipos inválidos");
+
+				traducaoTemp = cast_implicito(&$$, &$1, &$3, "atribuicao");
+
+
+				$$.traducao = $1.traducao + $3.traducao + traducaoTemp + "\t" + $1.label + " = " + $3.label + ";\n";
 			}
 			;
 
@@ -178,30 +207,6 @@ E 			: '(' E ')'
     			$$.traducao = $1.traducao + $3.traducao + traducaoTemp + "\t" + $$.label + " = " + $1.label + " / " + $3.label + ";\n";
 
     			declarar($$.tipo, $$.label);
-			}
-			| TK_ID '=' E
-			{
-				traducaoTemp = "";
-
-				if(!verificar($1.label)) {
-					yyerror("Variavel nao foi declarada.");
-				}
-
-				VARIAVEL variavel;
-				variavel = buscar($1.label);
-
-				if(variavel.tipado == false) {
-					atualizar($3.tipo, $1.label);
-					declarar($3.tipo, variavel.label);
-					variavel.tipo = $3.tipo;
-				}
-
-				$1.tipo = variavel.tipo;
-				$1.label = variavel.label;
-
-				traducaoTemp = cast_implicito(&$$, &$1, &$3, "atribuicao");
-
-				$$.traducao = $1.traducao + $3.traducao + traducaoTemp + "\t" + $1.label + " = " + $3.label + ";\n";
 			}
 			|TK_FLOAT
 			{

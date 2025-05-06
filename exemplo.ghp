@@ -1,7 +1,7 @@
-var j;
-var i;
-var w;
+def main {
+    var a;
+    var b;
 
-i = 2;
-j = 3.0;
-w = i + j;
+    a = 1;
+    b = 2 * a;
+}

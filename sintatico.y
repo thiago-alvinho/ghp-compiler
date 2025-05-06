@@ -44,8 +44,8 @@ void atualizar(string tipo, string name);
 
 %}
 
-%token TK_NUM TK_FLOAT TK_CHAR TK_BOOL TK_RELACIONAL TK_ORLOGIC TK_ANDLOGIC TK_NOLOGIC TK_CAST TK_VAR
-%token TK_MAIN TK_ID TK_TIPO_INT 
+%token TK_NUM TK_FLOAT TK_CHAR TK_BOOL TK_RELACIONAL TK_ORLOGIC TK_ANDLOGIC TK_NOLOGIC TK_CAST TK_VAR 
+%token TK_MAIN TK_DEF TK_ID TK_TIPO_INT 
 %token TK_FIM TK_ERROR
 
 %start S
@@ -60,27 +60,29 @@ void atualizar(string tipo, string name);
 
 %%
 
-S 			: COMANDOS
+S 			:TK_DEF TK_MAIN BLOCO
 			{
 				string codigo = "/*Compilador GHP*/\n"
 								"#include <iostream>\n"
 								"#include<string.h>\n"
 								"#include<stdio.h>\n\n"
-								"int main(void) {\n";
+								"def main{\n";
 
 				for (int i = 0; i < declaracoes.size(); i++) {
 					codigo += declaracoes[i];
 				}	
 
-				codigo += "\n" + $1.traducao;
+				codigo += "\n" + $3.traducao;
 								
 				codigo += 	"\n\treturn 0;"
 							"\n}";
 
 				cout << codigo << endl;
-			}
-			;
-
+			};
+BLOCO		: '{' COMANDOS '}'
+			{
+				$$.traducao = $2.traducao;
+			};
 COMANDOS	: COMANDO COMANDOS
 			{
 				$$.traducao = $1.traducao + $2.traducao;

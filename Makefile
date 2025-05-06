@@ -7,3 +7,6 @@ all:
 
 push:
 	cd ~/compiladorGHP && git add . && git commit -m "Alteração feita" && git push
+
+pushl:
+	cd ~/ghp-compiler && git add . && git commit -m "Alteração feita" && git push

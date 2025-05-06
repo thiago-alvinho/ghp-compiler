@@ -118,13 +118,11 @@ E 			: '(' E ')'
 			{
     			traducaoTemp = "";
 
-				if (($1.tipo == "float" && $3.tipo == "int") || ($1.tipo == "int" && $3.tipo == "float") ) {
 				traducaoTemp = cast_implicito(&$$, &$1, &$3, "operacao");
-				}
 
     			$$.label = gentempcode();
-    			$$.tipo = tipofinal[$1.tipo][$3.tipo];
-
+    			
+				$$.tipo = tipofinal[$1.tipo][$3.tipo];
 				if($$.tipo == "erro") yyerror("Operação com tipos inválidos");
 
     			$$.traducao = $1.traducao + $3.traducao + traducaoTemp +
@@ -136,13 +134,11 @@ E 			: '(' E ')'
 			{
 				traducaoTemp = "";
 				
-				if (($1.tipo == "float" && $3.tipo == "int") || ($1.tipo == "int" && $3.tipo == "float") ) {
 				traducaoTemp = cast_implicito(&$$, &$1, &$3, "operacao");
-				}
 				
     			$$.label = gentempcode();
-    			$$.tipo = tipofinal[$1.tipo][$3.tipo];
-
+    			
+				$$.tipo = tipofinal[$1.tipo][$3.tipo];
 				if($$.tipo == "erro") yyerror("Operação com tipos inválidos");
 
     			$$.traducao = $1.traducao + $3.traducao + traducaoTemp +
@@ -154,13 +150,11 @@ E 			: '(' E ')'
 			{
 				traducaoTemp = "";
 
-				if (($1.tipo == "float" && $3.tipo == "int") || ($1.tipo == "int" && $3.tipo == "float") ) {
 				traducaoTemp = cast_implicito(&$$, &$1, &$3, "operacao");
-				}
 
     			$$.label = gentempcode();
-    			$$.tipo = tipofinal[$1.tipo][$3.tipo];
-
+    			
+				$$.tipo = tipofinal[$1.tipo][$3.tipo];
 				if($$.tipo == "erro") yyerror("Operação com tipos inválidos");
 
     			$$.traducao = $1.traducao + $3.traducao + traducaoTemp +
@@ -172,13 +166,11 @@ E 			: '(' E ')'
 			{
 				traducaoTemp = "";
 
-				if (($1.tipo == "float" && $3.tipo == "int") || ($1.tipo == "int" && $3.tipo == "float") ) {
 				traducaoTemp = cast_implicito(&$$, &$1, &$3, "operacao");
-				}
 
 				$$.label = gentempcode();
-    			$$.tipo = tipofinal[$1.tipo][$3.tipo];
-				
+    			
+				$$.tipo = tipofinal[$1.tipo][$3.tipo];
 				if($$.tipo == "erro") yyerror("Operação com tipos inválidos");
 
     			$$.traducao = $1.traducao + $3.traducao + traducaoTemp + "\t" + $$.label + " = " + $1.label + " / " + $3.label + ";\n";
@@ -205,9 +197,7 @@ E 			: '(' E ')'
 				$1.tipo = variavel.tipo;
 				$1.label = variavel.label;
 
-				if (($1.tipo == "float" && $3.tipo == "int") || ($1.tipo == "int" && $3.tipo == "float") ) {
 				traducaoTemp = cast_implicito(&$$, &$1, &$3, "atribuicao");
-				}
 
 				$$.traducao = $1.traducao + $3.traducao + traducaoTemp + "\t" + $1.label + " = " + $3.label + ";\n";
 			}
@@ -386,6 +376,10 @@ void declarar(string tipo, string label) {
 string cast_implicito(atributos* no1, atributos* no2, atributos* no3, string tipo){
 
 		traducaoTemp = "";
+
+		if (!((no2->tipo == "float" && no3->tipo == "int") || (no2->tipo == "int" && no3->tipo == "float")) ) {
+			return traducaoTemp;
+		}
 
 		if(tipo == "operacao") {
 			

@@ -2,6 +2,6 @@ var j;
 var i;
 var w;
 
-i = 'a';
-j = true;
+i = 2;
+j = 3.0;
 w = i + j;

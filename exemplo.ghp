@@ -4,6 +4,7 @@ def main {
     var c;
     var d;
 
-    a = a + 2;
+    a = 1 + 2;
+    a = a + 5;
 
 }

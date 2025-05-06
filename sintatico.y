@@ -231,6 +231,8 @@ E 			: '(' E ')'
 				}
 				
 				variavel = buscar($1.label);
+				if(variavel.tipo == "") yyerror("Variavel ainda nao possui tipo");
+				
 				$$.label = variavel.label;
 				$$.traducao = "";
 				$$.tipo = variavel.tipo;

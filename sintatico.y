@@ -256,34 +256,34 @@ E 			: '(' E ')'
 
 				$$.label = $1.label;
 				$$.traducao = "";
-				$$.tipo = "int";
+				$$.tipo = "bool";
 			}
             | E TK_RELACIONAL E
     		{
             	$$.label = gentempcode();
        			$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + " = " + $1.label + " " + $2.label + " " + $3.label + ";\n";
-        		$$.tipo = "int";
+        		$$.tipo = "bool";
         		declarar($$.tipo, $$.label);
         	}
             | E TK_ORLOGIC E
     		{
    				$$.label = gentempcode();
         		$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + " = " + $1.label + " " + $2.label + " " + $3.label + ";\n";
-        		$$.tipo = "int";
+        		$$.tipo = "bool";
     			declarar($$.tipo, $$.label);
         	}
             | E TK_ANDLOGIC E
         	{
         		$$.label = gentempcode();
         		$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + " = " + $1.label + " " + $2.label + " " + $3.label + ";\n";
-        		$$.tipo = "int";
+        		$$.tipo = "bool";
         		declarar($$.tipo, $$.label);
             }
             | TK_NOLOGIC E
             {
 		    	$$.label = gentempcode();
         		$$.traducao = $2.traducao + "\t" + $$.label + " = !" + $2.label +  ";\n";
-        		$$.tipo = "int";
+        		$$.tipo = "bool";
         		declarar($$.tipo, $$.label);
         	}
 	    	| TK_CAST E
@@ -379,6 +379,7 @@ VARIAVEL buscar(string name)
 }
 
 void declarar(string tipo, string label) {
+	if (tipo == "bool") tipo = "int";
 	declaracoes.push_back("\t" + tipo + " " + label + ";\n");
 }
 

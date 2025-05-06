@@ -66,7 +66,11 @@ S 			:TK_DEF TK_MAIN BLOCO
 								"#include <iostream>\n"
 								"#include<string.h>\n"
 								"#include<stdio.h>\n\n"
+<<<<<<< HEAD
 								"int main(void) {\n";
+=======
+								"int main (void){\n";
+>>>>>>> 73392d50b8d7f72e7f7e1824dbb016f452504953
 
 				for (int i = 0; i < declaracoes.size(); i++) {
 					codigo += declaracoes[i];

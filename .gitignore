@@ -1,4 +1,5 @@
 glf
-y.tab.c*
+y.tab.c
 lex.yy.c
+y.tab.h
 .gitignore

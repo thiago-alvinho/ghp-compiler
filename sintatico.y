@@ -66,7 +66,7 @@ S 			:TK_DEF TK_MAIN BLOCO
 								"#include <iostream>\n"
 								"#include<string.h>\n"
 								"#include<stdio.h>\n\n"
-								"def main{\n";
+								"int main (void){\n";
 
 				for (int i = 0; i < declaracoes.size(); i++) {
 					codigo += declaracoes[i];

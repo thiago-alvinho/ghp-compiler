@@ -143,7 +143,7 @@ DEC			:TK_VAR TK_ID
 
 			}
 
-			
+
 E 			: '(' E ')'
 			{
 				$$ = $2;
@@ -326,6 +326,10 @@ int main(int argc, char* argv[])
 	tipofinal["int"]["float"] = "float";
 	tipofinal["char"]["int"] = "char";
 	tipofinal["int"]["char"] = "char";
+	tipofinal["char"]["char"] = "char";
+	tipofinal["bool"]["bool"] = "bool";
+	tipofinal["bool"]["int"] = "bool";
+	tipofinal["int"]["bool"] = "bool";
 	tipofinal["float"]["char"] = "erro";
 	tipofinal["char"]["float"] = "erro";
 	tipofinal["bool"]["char"] = "erro";

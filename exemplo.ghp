@@ -2,10 +2,9 @@ def main {
     var a;
     var b;
     var c;
-    var d;
-
-    a = 2.0;
-    b = 3.0;
-    c = (a < b) + 3;
+   
+    a = 2 + 5 * 3.0 / 1;
+    b = a * 3 < 5;
+    c = b + true || false;
 
 }

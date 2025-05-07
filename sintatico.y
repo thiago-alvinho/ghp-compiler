@@ -93,13 +93,14 @@ COMANDOS	: COMANDO COMANDOS
 			}
 			;
 
-COMANDO 	: R ';'
+COMANDO 	: E ';'
 			{
 				$$ = $1;
 			}
+			| ATRI ';'
+			| DEC ';'
 			;
-R 			: E
-			| TK_ID '=' E
+ATRI 		:TK_ID '=' E
 			{
 				traducaoTemp = "";
 
@@ -128,11 +129,7 @@ R 			: E
 			}
 			;
 
-E 			: '(' E ')'
-			{
-				$$ = $2;
-			}
-			|TK_VAR TK_ID
+DEC			:TK_VAR TK_ID
 			{
 				if(verificar($2.label)) {
 					yyerror("Variavel já declarada.\n");
@@ -144,6 +141,12 @@ E 			: '(' E ')'
 				$$.traducao = "";
 				$$.tipo = "";
 
+			}
+
+			
+E 			: '(' E ')'
+			{
+				$$ = $2;
 			}
 			| E '+' E
 			{

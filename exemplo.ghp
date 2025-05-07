@@ -1,10 +1,7 @@
 def main {
     var a;
     var b;
-    var c;
-   
-    a = 2 + 5 * 3.0 / 1;
-    b = a * 3 < 5;
-    c = b + true || false;
+    
+   a = 1 > 2.0;
 
 }

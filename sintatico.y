@@ -52,10 +52,10 @@ void atualizar(string tipo, string name);
 
 %left TK_ORLOGIC
 %left TK_ANDLOGIC
-%left TK_NOLOGIC
 %left TK_RELACIONAL
 %left '+' '-'
 %left '*' '/'
+%right TK_NOLOGIC
 %left '(' ')' TK_CAST
 
 %%
@@ -262,9 +262,13 @@ E 			: '(' E ')'
 				$$.tipo = "bool";
 			}
             | E TK_RELACIONAL E
-    		{
+    		{	
+				traducaoTemp = "";
+
+				traducaoTemp = cast_implicito(&$$, &$1, &$3, "operacao");
+
             	$$.label = gentempcode();
-       			$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + " = " + $1.label + " " + $2.label + " " + $3.label + ";\n";
+       			$$.traducao = $1.traducao + $3.traducao + traducaoTemp + "\t" + $$.label + " = " + $1.label + " " + $2.label + " " + $3.label + ";\n";
         		$$.tipo = "bool";
         		declarar($$.tipo, $$.label);
         	}
@@ -328,8 +332,8 @@ int main(int argc, char* argv[])
 	tipofinal["int"]["char"] = "char";
 	tipofinal["char"]["char"] = "char";
 	tipofinal["bool"]["bool"] = "bool";
-	tipofinal["bool"]["int"] = "bool";
-	tipofinal["int"]["bool"] = "bool";
+	tipofinal["bool"]["int"] = "erro";
+	tipofinal["int"]["bool"] = "erro";
 	tipofinal["float"]["char"] = "erro";
 	tipofinal["char"]["float"] = "erro";
 	tipofinal["bool"]["char"] = "erro";
@@ -385,12 +389,14 @@ VARIAVEL buscar(string name)
 	return variavel;
 }
 
-void declarar(string tipo, string label) {
+void declarar(string tipo, string label) 
+{
 	if (tipo == "bool") tipo = "int";
 	declaracoes.push_back("\t" + tipo + " " + label + ";\n");
 }
 
-string cast_implicito(atributos* no1, atributos* no2, atributos* no3, string tipo){
+string cast_implicito(atributos* no1, atributos* no2, atributos* no3, string tipo)
+{
 
 		traducaoTemp = "";
 

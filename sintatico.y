@@ -28,17 +28,14 @@ struct atributos
 	string tipo;
 };
 
-typedef struct 
-{
-	string name;
-	string tipo;
-	string label;
-	bool tipado;
-} VARIAVEL;
-
-vector<VARIAVEL> tabelaSimbolos;
 vector<string> declaracoes;
 vector<unordered_map<string, Simbolo>> tabela;
+vector<string> break_label_stack;
+vector<string> continue_label_stack;
+vector<string> rotulo_condicao;
+vector<string> rotulo_inicio;
+vector<string> rotulo_fim;
+vector<string> rotulo_incremento;
 
 map<string, map<string, string>> tipofinal;
 
@@ -48,19 +45,19 @@ string gentempcode();
 bool verificar(string name);
 Simbolo buscar(string name);
 void declarar(string tipo, string label);
-VARIAVEL criar(string tipo, string label);
 string cast_implicito(atributos* no1, atributos* no2, atributos* no3, string tipo);
 void atualizar(string tipo, string nome);
 void adicionarSimbolo(string nome);
 void retirarEscopo();
 void adicionarEscopo();
 string genlabel();
+void retirar_rotulos();
 
 
 %}
 
 %token TK_NUM TK_FLOAT TK_CHAR TK_BOOL TK_RELACIONAL TK_ORLOGIC TK_ANDLOGIC TK_NOLOGIC TK_CAST TK_VAR 
-%token TK_MAIN TK_DEF TK_ID TK_IF TK_THEN TK_ELSE
+%token TK_MAIN TK_DEF TK_ID TK_IF TK_THEN TK_ELSE TK_WHILE TK_DO TK_FOR TK_BREAK TK_CONTINUE
 %token TK_FIM TK_ERROR
 
 %start S
@@ -110,6 +107,46 @@ COMANDOS	: COMANDO COMANDOS
 			}
 			;
 
+CRIAR_ROTULOS_FOR 	: 
+            		{
+        				rotulo_condicao.push_back(genlabel());
+                		rotulo_incremento.push_back(genlabel());
+                		rotulo_fim.push_back(genlabel());
+						rotulo_inicio.push_back(genlabel());
+
+                		break_label_stack.push_back(rotulo_fim.back());
+                		continue_label_stack.push_back(rotulo_incremento.back());
+                    }
+                    ;
+CRIAR_ROTULOS		:
+					{
+						rotulo_inicio.push_back(genlabel());
+						rotulo_condicao.push_back(genlabel());
+						rotulo_fim.push_back(genlabel());
+						rotulo_incremento.push_back(genlabel());
+
+						break_label_stack.push_back(rotulo_fim.back());
+                		continue_label_stack.push_back(rotulo_condicao.back());
+
+					}
+
+RETIRAR_ROTULOS     :
+                    {
+                    
+                    if (!continue_label_stack.empty()) {
+                        continue_label_stack.pop_back();
+                    } else {
+                        yyerror("Pilha continue vazia no cleanup");
+                    }
+                    
+					if (!break_label_stack.empty()) {
+                        break_label_stack.pop_back();
+                    } else {
+                        yyerror("Pilha break vazia no cleanup");
+                    }
+
+                    }
+                    ;
 COMANDO 	: E ';'
 			{
 				$$ = $1;
@@ -159,6 +196,93 @@ COMANDO 	: E ';'
 
                 $$.tipo = ""; 
                 $$.label = "";
+			}
+			| TK_WHILE '(' E ')' CRIAR_ROTULOS BLOCO RETIRAR_ROTULOS
+			{
+                if($3.tipo != "bool") {
+                    yyerror("Erro Semantico: A expressao na condicional 'while' deve ser do tipo booleano.");
+                }
+
+                string temp_negated_expr = gentempcode();
+                declarar("bool", temp_negated_expr);
+
+                $$.traducao = rotulo_condicao.back() + ":\n";
+                $$.traducao += $3.traducao;
+                $$.traducao += "\t" + temp_negated_expr + " = !" + $3.label + ";\n";
+                $$.traducao += string("\t") + "if (" + temp_negated_expr + ") goto " + rotulo_fim.back() + ";\n";
+                $$.traducao += $6.traducao;
+                $$.traducao += string("\tgoto ") + rotulo_condicao.back() + ";\n";
+                $$.traducao += rotulo_fim.back() + ":\n";
+
+				retirar_rotulos();
+
+                $$.tipo = ""; 
+                $$.label = "";
+			}
+			| TK_DO CRIAR_ROTULOS BLOCO RETIRAR_ROTULOS TK_WHILE '(' E ')' ';'
+			{
+                if($7.tipo != "bool") {
+                    yyerror("Erro Semantico: A expressao na condicional 'do-while' deve ser do tipo booleano.");
+                }
+
+                $$.traducao = rotulo_inicio.back() + ":\n";
+                $$.traducao += $3.traducao;
+				$$.traducao += rotulo_condicao.back() + ":\n";
+                $$.traducao += $7.traducao;
+                $$.traducao += string("\t") + "if (" + $7.label + ") goto " + rotulo_inicio.back() + ";\n";
+				$$.traducao += rotulo_fim.back() + ":\n";
+
+				retirar_rotulos();
+
+                $$.tipo = ""; 
+                $$.label = "";
+			}
+			| TK_FOR '(' ATRI ';' E ';' ATRI ')' CRIAR_ROTULOS_FOR BLOCO RETIRAR_ROTULOS
+			{
+                if($5.tipo != "bool") {
+                    yyerror("Erro Semantico: A expressao de condicao no loop 'for' deve ser do tipo booleano.");
+                }
+
+                string temp_negated_cond = gentempcode();
+                declarar("bool", temp_negated_cond);
+
+                $$.traducao = $3.traducao;
+                $$.traducao += rotulo_condicao.back() + ":\n";
+                $$.traducao += $5.traducao;
+                $$.traducao += "\t" + temp_negated_cond + " = !" + $5.label + ";\n";
+                $$.traducao += string("\t") + "if (" + temp_negated_cond + ") goto " + rotulo_fim.back() + ";\n";
+                $$.traducao += $10.traducao;
+				$$.traducao += rotulo_incremento.back() + ":\n";
+                $$.traducao += $7.traducao;
+                $$.traducao += string("\tgoto ") + rotulo_condicao.back() + ";\n";
+                $$.traducao += rotulo_fim.back() + ":\n";
+
+				retirar_rotulos();
+
+                $$.tipo = ""; 
+                $$.label = "";
+			}
+			| TK_BREAK ';'
+			{
+				if (break_label_stack.empty()) {
+                    yyerror("Erro Semantico: Comando 'break' utilizado fora de um loop.");
+                } else {
+                    $$.traducao = string("\tgoto ") + break_label_stack.back() + ";\n";
+                }
+                
+				$$.tipo = ""; 
+				$$.label = "";
+			}
+			| TK_CONTINUE ';'
+			{
+				if (continue_label_stack.empty()) {
+                    yyerror("Erro Semantico: Comando 'continue' utilizado fora de um loop.");
+                } else {
+                    $$.traducao = string("\tgoto ") + continue_label_stack.back() + ";\n";
+                }
+
+                $$.tipo = ""; 
+				$$.label = "";
 			}
 			;
 ATRI 		:TK_ID '=' E
@@ -369,6 +493,7 @@ E 			: '(' E ')'
 	    	}
 		    ;
 
+
 %%
 
 #include "lex.yy.c"
@@ -386,6 +511,7 @@ int main(int argc, char* argv[])
 	adicionarEscopo();
 
 	traducaoTemp = "";
+	label_qnt = 0;
 	var_temp_qnt = 0;
 	tipofinal["int"]["int"] = "int";
 	tipofinal["float"]["int"] = "float";
@@ -519,5 +645,31 @@ void adicionarSimbolo(string nome)
 string genlabel()
 {
     label_qnt++;
-    return "L_FIM_" + to_string(label_qnt); // Gera labels como L_FIM_1, L_FIM_2, etc.
+    return "ROTULO_" + to_string(label_qnt); // Gera labels como L_FIM_1, L_FIM_2, etc.
+}
+
+void retirar_rotulos() {
+	if (!rotulo_condicao.empty()) {
+    	rotulo_condicao.pop_back();
+    } else {
+        yyerror("Tentativa de dar pop na pilha rotulo condicao vazia");
+    }
+                    
+	if (!rotulo_fim.empty()) {
+        rotulo_fim.pop_back();
+    } else {
+        yyerror("Tentativa de dar pop na pilha rotulo fim vazia");
+    }
+					
+	if (!rotulo_inicio.empty()) {
+        rotulo_inicio.pop_back();
+    } else {
+        yyerror("Tentativa de dar pop na pilha rotulo inicio vazia");
+    }
+                    
+	if (!rotulo_incremento.empty()) {
+        rotulo_incremento.pop_back();
+    } else {
+        yyerror("Tentativa de dar pop na pilha rotulo incremento vazia");
+	}
 }

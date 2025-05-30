@@ -2,17 +2,9 @@ def main {
     var a;
     a = 15;
 
-    {
-        var b;
-        b = a;
+    if (a < 5 && a > 8) then {
         a = 2;
-        
-        {
-            var c;
-            b = 3;
-        }
-
-        c = 1;
-    }
-    
+    } else {
+        a = 3;
+    } 
 }

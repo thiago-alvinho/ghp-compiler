@@ -11,6 +11,7 @@
 using namespace std;
 
 int var_temp_qnt;
+int label_qnt;
 string traducaoTemp;
 
 struct Simbolo
@@ -53,12 +54,13 @@ void atualizar(string tipo, string nome);
 void adicionarSimbolo(string nome);
 void retirarEscopo();
 void adicionarEscopo();
+string genlabel();
 
 
 %}
 
 %token TK_NUM TK_FLOAT TK_CHAR TK_BOOL TK_RELACIONAL TK_ORLOGIC TK_ANDLOGIC TK_NOLOGIC TK_CAST TK_VAR 
-%token TK_MAIN TK_DEF TK_ID 
+%token TK_MAIN TK_DEF TK_ID TK_IF TK_THEN TK_ELSE
 %token TK_FIM TK_ERROR
 
 %start S
@@ -115,6 +117,49 @@ COMANDO 	: E ';'
 			| ATRI ';'
 			| DEC ';'
 			| BLOCO
+			| TK_IF '(' E ')' TK_THEN BLOCO
+			{
+                if($3.tipo != "bool") {
+                    yyerror("Erro Semantico: A expressao na condicional 'if' deve ser do tipo booleano.");
+                }
+
+                string temp_negated_expr = gentempcode();
+                declarar("bool", temp_negated_expr);
+
+                string fim_label = genlabel();
+                $$.traducao = $3.traducao; 
+                $$.traducao += "\t" + temp_negated_expr + " = !" + $3.label + ";\n";
+                $$.traducao += string("\t") + "if (" + temp_negated_expr + ") goto " + fim_label + ";\n";
+                $$.traducao += $6.traducao;
+                $$.traducao += fim_label + ":\n";
+                $$.tipo = "";
+                $$.label = "";
+
+			}
+			| TK_IF '(' E ')' TK_THEN BLOCO TK_ELSE BLOCO
+			{
+                if($3.tipo != "bool") {
+                    yyerror("Erro Semantico: A expressao na condicional 'if' deve ser do tipo booleano.");
+                }
+
+                string else_label = genlabel();
+                string end_if_label = genlabel();
+
+                string temp_negated_expr = gentempcode();
+                declarar("bool", temp_negated_expr);
+
+                $$.traducao = $3.traducao;
+                $$.traducao += "\t" + temp_negated_expr + " = !" + $3.label + ";\n";
+                $$.traducao += string("\t") + "if (" + temp_negated_expr + ") goto " + else_label + ";\n";
+                $$.traducao += $6.traducao;
+                $$.traducao += string("\tgoto ") + end_if_label + ";\n";
+                $$.traducao += else_label + ":\n";
+                $$.traducao += $8.traducao;
+                $$.traducao += end_if_label + ":\n";
+
+                $$.tipo = ""; 
+                $$.label = "";
+			}
 			;
 ATRI 		:TK_ID '=' E
 			{
@@ -469,4 +514,10 @@ void adicionarSimbolo(string nome)
 	simbolo.label = gentempcode();
 	auto it = tabela.end();
 	(*(--it))[nome] = simbolo;
+}
+
+string genlabel()
+{
+    label_qnt++;
+    return "L_FIM_" + to_string(label_qnt); // Gera labels como L_FIM_1, L_FIM_2, etc.
 }

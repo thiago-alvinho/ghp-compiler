@@ -24,6 +24,9 @@ CAST ("(float)"|"(int)"|"(bool)"|"(char)")
 "\n"		{}
     
 {DELIM} 	{}
+"if"        {return TK_IF;}
+"then"      {return TK_THEN;}
+"else"      {return TK_ELSE;}
 
 "def"       {return TK_DEF;}
 

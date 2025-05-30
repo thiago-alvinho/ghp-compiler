@@ -11,6 +11,7 @@ DELIM {ESPACO}+
 NUM {DIGITO}+
 REAL {NUM}+("."{NUM}+)?
 CHAR \'({LETRA}|{NUM})\'
+CADEIA_CHAR \"[^\"]*\"
 ID {LETRA}({LETRA}|{NUM})*
 BOOL ("true"|"false")
 RELACIONAIS (">"|"<"|"<="|">="|"=="|"!=")
@@ -56,6 +57,7 @@ CAST ("(float)"|"(int)"|"(bool)"|"(char)")
 {ID}		  { yylval.label = yytext; return TK_ID;}
 {REAL}        { yylval.label = yytext; return TK_FLOAT;}
 {CHAR}        { yylval.label = yytext; return TK_CHAR;}
+{CADEIA_CHAR} { yylval.label = yytext; yylval.tipo = "char"; return TK_CADEIA_CHAR;}
 .			  { *yytext; }
     
 %%

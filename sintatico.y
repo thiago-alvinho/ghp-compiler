@@ -50,6 +50,9 @@ Simbolo buscar(string name);
 void declarar(string tipo, string label);
 VARIAVEL criar(string tipo, string label);
 string cast_implicito(atributos* no1, atributos* no2, atributos* no3, string tipo);
+void atualizar(string tipo, string name);
+int tamanho_string(string traducao);
+string retirar_aspas(string traducao, int tamanho);
 void atualizar(string tipo, string nome);
 void adicionarSimbolo(string nome);
 void retirarEscopo();
@@ -272,7 +275,7 @@ E 			: '(' E ')'
 
     			declarar($$.tipo, $$.label);
 			}
-			|TK_FLOAT
+			| TK_FLOAT
 			{
 				$$.label = gentempcode();
 				$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
@@ -367,6 +370,24 @@ E 			: '(' E ')'
     			$$.label = temp2;
     			$$.tipo = $1.tipo;
 	    	}
+			| TK_CADEIA_CHAR
+			{
+				int tamString = tamanho_string($1.label);
+				traducaoTemp = retirar_aspas($1.label, tamString);
+
+				$$.label = gentempcode();
+				for(int i = 0; i < tamString; i++){
+					if(i != tamString - 1) 
+					{
+						$$.traducao += "\t" + $$.label + "[" + to_string(i) + "] = '" + traducaoTemp[i] + "';\n";
+					} else
+					{
+						$$.traducao += "\t" + $$.label + "[" + to_string(i) + "] = '\\0';\n";
+					}
+					
+				}
+				declaracoes.push_back("\tchar " + $$.label + "[" + to_string(tamString) + "]" + ";\n");
+			}
 		    ;
 
 %%
@@ -520,4 +541,28 @@ string genlabel()
 {
     label_qnt++;
     return "L_FIM_" + to_string(label_qnt); // Gera labels como L_FIM_1, L_FIM_2, etc.
+}
+
+int tamanho_string(string traducao){
+	traducaoTemp = "";
+	int tamanho = 0;
+	int i = 0;
+
+	while(traducao[i] != '\0'){
+		if(traducao[i] != '"') tamanho++;
+		i++;
+	}
+	tamanho++;
+
+	return tamanho;
+}
+
+string retirar_aspas(string traducao, int tamanho){
+	traducaoTemp = "";
+
+	for(int j = 1; j < tamanho; j++){
+		traducaoTemp += traducao[j];
+	}	
+
+	return traducaoTemp;
 }

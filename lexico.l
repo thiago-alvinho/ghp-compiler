@@ -28,6 +28,11 @@ CAST ("(float)"|"(int)"|"(bool)"|"(char)")
 "if"        {return TK_IF;}
 "then"      {return TK_THEN;}
 "else"      {return TK_ELSE;}
+"while"     {return TK_WHILE;}
+"do"        {return TK_DO;}
+"for"       {return TK_FOR;}
+"break"     {return TK_BREAK;}
+"continue"  {return TK_CONTINUE;}
 
 "def"       {return TK_DEF;}
 

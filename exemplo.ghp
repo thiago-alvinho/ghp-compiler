@@ -1,7 +1,18 @@
 def main {
     var a;
-    var b;
-    
-   a = 1 > 2.0;
+    a = 15;
 
+    {
+        var b;
+        b = a;
+        a = 2;
+        
+        {
+            var c;
+            b = 3;
+        }
+
+        c = 1;
+    }
+    
 }

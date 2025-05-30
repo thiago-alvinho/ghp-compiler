@@ -4,6 +4,7 @@
 #include <sstream>
 #include <vector>
 #include <map>
+#include <unordered_map>
 
 #define YYSTYPE atributos
 
@@ -11,6 +12,13 @@ using namespace std;
 
 int var_temp_qnt;
 string traducaoTemp;
+
+struct Simbolo
+{
+	string label;
+	string tipo = "";
+	bool tipado = false;
+};
 
 struct atributos
 {
@@ -29,6 +37,7 @@ typedef struct
 
 vector<VARIAVEL> tabelaSimbolos;
 vector<string> declaracoes;
+vector<unordered_map<string, Simbolo>> tabela;
 
 map<string, map<string, string>> tipofinal;
 
@@ -36,11 +45,15 @@ int yylex(void);
 void yyerror(string);
 string gentempcode();
 bool verificar(string name);
-VARIAVEL buscar(string name);
+Simbolo buscar(string name);
 void declarar(string tipo, string label);
 VARIAVEL criar(string tipo, string label);
 string cast_implicito(atributos* no1, atributos* no2, atributos* no3, string tipo);
-void atualizar(string tipo, string name);
+void atualizar(string tipo, string nome);
+void adicionarSimbolo(string nome);
+void retirarEscopo();
+void adicionarEscopo();
+
 
 %}
 
@@ -79,10 +92,12 @@ S 			:TK_DEF TK_MAIN BLOCO
 
 				cout << codigo << endl;
 			};
-BLOCO		: '{' COMANDOS '}'
+BLOCO		: '{'{ adicionarEscopo();} COMANDOS '}'
 			{
-				$$.traducao = $2.traducao;
-			};
+				$$.traducao = $3.traducao;
+				retirarEscopo();
+			}
+			;
 COMANDOS	: COMANDO COMANDOS
 			{
 				$$.traducao = $1.traducao + $2.traducao;
@@ -99,6 +114,7 @@ COMANDO 	: E ';'
 			}
 			| ATRI ';'
 			| DEC ';'
+			| BLOCO
 			;
 ATRI 		:TK_ID '=' E
 			{
@@ -108,7 +124,7 @@ ATRI 		:TK_ID '=' E
 					yyerror("Variavel nao foi declarada.");
 				}
 
-				VARIAVEL variavel;
+				Simbolo variavel;
 				variavel = buscar($1.label);
 
 				if(variavel.tipado == false) {
@@ -135,7 +151,7 @@ DEC			:TK_VAR TK_ID
 					yyerror("Variavel já declarada.\n");
 				}
 
-				VARIAVEL variavel = criar("", $2.label);
+				adicionarSimbolo($2.label);
 
 				$$.label = "";
 				$$.traducao = "";
@@ -227,7 +243,7 @@ E 			: '(' E ')'
 			}
 			| TK_ID
 			{
-				VARIAVEL variavel;
+				Simbolo variavel;
 
 				if(!verificar($1.label)) {
 					yyerror("Variavel nao foi declarada.");
@@ -322,6 +338,8 @@ string gentempcode()
 
 int main(int argc, char* argv[])
 {
+	adicionarEscopo();
+
 	traducaoTemp = "";
 	var_temp_qnt = 0;
 	tipofinal["int"]["int"] = "int";
@@ -352,41 +370,23 @@ void yyerror(string MSG)
 	exit (0);
 }
 
-VARIAVEL criar(string tipo, string label)
-{
-	VARIAVEL variavel;
-	variavel.tipo = tipo;
-	variavel.name = label;
-	variavel.label = gentempcode();
-	variavel.tipado = false;
-	tabelaSimbolos.push_back(variavel);
-
-	return variavel;
-}
-
 bool verificar(string name)
 {
-	for(int i = 0; i < tabelaSimbolos.size(); i++) {
-		if(tabelaSimbolos[i].name == name) {
-			return true;
-		}
+	for(int i = tabela.size() - 1; i >= 0; i--) {
+		auto it = tabela[i].find(name);
+		if(!(it == tabela[i].end())) return true;
 	}
 
 	return false;
 }
 
-VARIAVEL buscar(string name)
+Simbolo buscar(string name)
 {
-	VARIAVEL variavel;
-
-	for(int i = 0; i < tabelaSimbolos.size(); i++) {
-		if(tabelaSimbolos[i].name == name) {
-			variavel = tabelaSimbolos[i];
-			return variavel;
-		}
+	for(int i = tabela.size() - 1; i >= 0; i--) {
+		auto it = tabela[i].find(name);
+		if(!(it == tabela[i].end())) return it->second;
 	}
 
-	return variavel;
 }
 
 void declarar(string tipo, string label) 
@@ -440,12 +440,33 @@ string cast_implicito(atributos* no1, atributos* no2, atributos* no3, string tip
 	return traducaoTemp;
 }
 
-void atualizar(string tipo, string name) {
+void atualizar(string tipo, string nome) {
 
-		for(int i = 0; i < tabelaSimbolos.size(); i++) {
-		if(tabelaSimbolos[i].name == name) {
-			tabelaSimbolos[i].tipo = tipo;
-			tabelaSimbolos[i].tipado = true;
+	for(int i = tabela.size() - 1; i >= 0; i--) {
+		auto it = tabela[i].find(nome);
+		if(!(it == tabela[i].end())) {
+			it->second.tipo = tipo;
+			it->second.tipado = true;
+			break;
 		}
 	}
+}
+
+void adicionarEscopo()
+{
+	unordered_map<string, Simbolo> escopo;
+	tabela.push_back(escopo);
+}
+
+void retirarEscopo() 
+{
+	tabela.pop_back();
+}
+
+void adicionarSimbolo(string nome)
+{
+	Simbolo simbolo;
+	simbolo.label = gentempcode();
+	auto it = tabela.end();
+	(*(--it))[nome] = simbolo;
 }

@@ -22,29 +22,31 @@ CAST ("(float)"|"(int)"|"(bool)"|"(char)")
     
 %%
     
-"\n"		{}
+"\n"		  {}
     
-{DELIM} 	{}
-"if"        {return TK_IF;}
-"then"      {return TK_THEN;}
-"else"      {return TK_ELSE;}
-"while"     {return TK_WHILE;}
-"do"        {return TK_DO;}
-"for"       {return TK_FOR;}
-"break"     {return TK_BREAK;}
-"continue"  {return TK_CONTINUE;}
+{DELIM} 	  {}
+"if"          {return TK_IF;}
+"then"        {return TK_THEN;}
+"else"        {return TK_ELSE;}
+"while"       {return TK_WHILE;}
+"do"          {return TK_DO;}
+"for"         {return TK_FOR;}
+"break"       {return TK_BREAK;}
+"continue"    {return TK_CONTINUE;}
 
-"def"       {return TK_DEF;}
+"def"         {return TK_DEF;}
 
-"main"		{return TK_MAIN;}
+"main"		  {return TK_MAIN;}
     
-"var"       {return TK_VAR;}
+"var"         {return TK_VAR;}
     
-[(){}[\];,]	{ return *yytext; }
+[(){}[\];,]	  { return *yytext; }
     
-[+\-*/]		{ return *yytext; }
+[+\-*/]		  { return *yytext; }
     
-"="		    { return '='; }
+"="		      { return '='; }
+
+"strcpy"      {yylval.label = yytext; return TK_CPY;}
 
 {CAST}        { yylval.label = yytext; 
                if(yylval.label == "(float)") yylval.tipo = "float";

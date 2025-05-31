@@ -18,6 +18,8 @@ struct Simbolo
 {
 	string label;
 	string tipo = "";
+	string tamanho = "";
+	string vetor_string = "";
 	bool tipado = false;
 };
 
@@ -26,6 +28,8 @@ struct atributos
 	string label;
 	string traducao;
 	string tipo;
+	string tamanho = "";
+	string vetor_string = "";
 };
 
 vector<string> declaracoes;
@@ -44,12 +48,11 @@ void yyerror(string);
 string gentempcode();
 bool verificar(string name);
 Simbolo buscar(string name);
-void declarar(string tipo, string label);
+void declarar(string tipo, string label, int tam_string);
 string cast_implicito(atributos* no1, atributos* no2, atributos* no3, string tipo);
-void atualizar(string tipo, string name);
+void atualizar(string tipo, string nome, string tamanho, string cadeia_char);
 int tamanho_string(string traducao);
 string retirar_aspas(string traducao, int tamanho);
-void atualizar(string tipo, string nome);
 void adicionarSimbolo(string nome);
 void retirarEscopo();
 void adicionarEscopo();
@@ -59,8 +62,8 @@ void retirar_rotulos();
 
 %}
 
-%token TK_NUM TK_FLOAT TK_CHAR TK_BOOL TK_RELACIONAL TK_ORLOGIC TK_ANDLOGIC TK_NOLOGIC TK_CAST TK_VAR 
-%token TK_MAIN TK_DEF TK_ID TK_IF TK_THEN TK_ELSE TK_WHILE TK_DO TK_FOR TK_BREAK TK_CONTINUE
+%token TK_NUM TK_FLOAT TK_CHAR TK_BOOL TK_RELACIONAL TK_ORLOGIC TK_ANDLOGIC TK_NOLOGIC TK_CAST TK_VAR TK_CADEIA_CHAR
+%token TK_MAIN TK_DEF TK_ID TK_IF TK_THEN TK_ELSE TK_WHILE TK_DO TK_FOR TK_BREAK TK_CONTINUE TK_CPY
 %token TK_FIM TK_ERROR
 
 %start S
@@ -164,7 +167,7 @@ COMANDO 	: E ';'
                 }
 
                 string temp_negated_expr = gentempcode();
-                declarar("bool", temp_negated_expr);
+                declarar("bool", temp_negated_expr, -1);
 
                 string fim_label = genlabel();
                 $$.traducao = $3.traducao; 
@@ -186,7 +189,7 @@ COMANDO 	: E ';'
                 string end_if_label = genlabel();
 
                 string temp_negated_expr = gentempcode();
-                declarar("bool", temp_negated_expr);
+                declarar("bool", temp_negated_expr, -1);
 
                 $$.traducao = $3.traducao;
                 $$.traducao += "\t" + temp_negated_expr + " = !" + $3.label + ";\n";
@@ -207,7 +210,7 @@ COMANDO 	: E ';'
                 }
 
                 string temp_negated_expr = gentempcode();
-                declarar("bool", temp_negated_expr);
+                declarar("bool", temp_negated_expr, -1);
 
                 $$.traducao = rotulo_condicao.back() + ":\n";
                 $$.traducao += $3.traducao;
@@ -247,7 +250,7 @@ COMANDO 	: E ';'
                 }
 
                 string temp_negated_cond = gentempcode();
-                declarar("bool", temp_negated_cond);
+                declarar("bool", temp_negated_cond, -1);
 
                 $$.traducao = $3.traducao;
                 $$.traducao += rotulo_condicao.back() + ":\n";
@@ -300,9 +303,15 @@ ATRI 		:TK_ID '=' E
 				variavel = buscar($1.label);
 
 				if(variavel.tipado == false) {
-					atualizar($3.tipo, $1.label);
-					declarar($3.tipo, variavel.label);
-					variavel.tipo = $3.tipo;
+					if($3.tipo == "string" ){
+						atualizar($3.tipo, $1.label, $3.tamanho, $3.vetor_string);
+						declarar($3.tipo, variavel.label, stoi($3.tamanho));
+						variavel.tipo = $3.tipo;
+					}else{
+						atualizar($3.tipo, $1.label, "", "");
+						declarar($3.tipo, variavel.label, -1);
+						variavel.tipo = $3.tipo;
+					}
 				}
 
 				$1.tipo = variavel.tipo;
@@ -311,7 +320,6 @@ ATRI 		:TK_ID '=' E
 				if(tipofinal[$1.tipo][$3.tipo] == "erro") yyerror("Operação com tipos inválidos");
 
 				traducaoTemp = cast_implicito(&$$, &$1, &$3, "atribuicao");
-
 
 				$$.traducao = $1.traducao + $3.traducao + traducaoTemp + "\t" + $1.label + " = " + $3.label + ";\n";
 			}
@@ -328,6 +336,8 @@ DEC			:TK_VAR TK_ID
 				$$.label = "";
 				$$.traducao = "";
 				$$.tipo = "";
+				$$.tamanho = "";
+				$$.vetor_string = "";
 
 			}
 
@@ -337,20 +347,46 @@ E 			: '(' E ')'
 				$$ = $2;
 			}
 			| E '+' E
-			{
-    			traducaoTemp = "";
+			{	
+				traducaoTemp = "";
 
-				traducaoTemp = cast_implicito(&$$, &$1, &$3, "operacao");
+				if(tipofinal[$1.tipo][$3.tipo] == "string")
+				{	
+					$$.label = gentempcode();
+					$$.tipo = "string";
+					int tam1 = stoi($1.tamanho);
+					int tam2 = stoi($3.tamanho);
+					int tamcat = (tam1 - 1) + (tam2 - 1) + 1;
+					$$.tamanho = to_string(tamcat);
 
-    			$$.label = gentempcode();
-    			
-				$$.tipo = tipofinal[$1.tipo][$3.tipo];
-				if($$.tipo == "erro") yyerror("Operação com tipos inválidos");
+					for(int i = 0; i < tamcat; i++){
+						if(i == tamcat - 1){
+							traducaoTemp += "\t" + $$.label + "[" + to_string(i) + "] = " + "'\\0'" + ";\n";
+						} else if(i < (stoi($1.tamanho)- 1)){
+							traducaoTemp += "\t" + $$.label + "[" + to_string(i) + "] = '" + $1.vetor_string[i] + "';\n";
+						} else{
+							traducaoTemp += "\t" + $$.label + "[" + to_string(i) + "] = '" + $3.vetor_string[i - (tam1 - 1)] + "';\n";
+						}
+					}
+					
+					$$.traducao = "\t" + $$.label + " = strcat(" + $1.vetor_string + ", " + $3.vetor_string + ");\n" + traducaoTemp;
+					declarar($$.tipo, $$.label, tamcat);
+					
+				}
+				else
+				{
+					traducaoTemp = cast_implicito(&$$, &$1, &$3, "operacao");
 
-    			$$.traducao = $1.traducao + $3.traducao + traducaoTemp +
-                  	"\t" + $$.label + " = " + $1.label + " + " + $3.label + ";\n";
+					$$.label = gentempcode();
+					
+					$$.tipo = tipofinal[$1.tipo][$3.tipo];
+					if($$.tipo == "erro") yyerror("Operação com tipos inválidos");
 
-    			declarar($$.tipo, $$.label);
+					$$.traducao = $1.traducao + $3.traducao + traducaoTemp +
+						"\t" + $$.label + " = " + $1.label + " + " + $3.label + ";\n";
+
+					declarar($$.tipo, $$.label, -1);
+				}
 			}
 			| E '-' E
 			{
@@ -361,12 +397,12 @@ E 			: '(' E ')'
     			$$.label = gentempcode();
     			
 				$$.tipo = tipofinal[$1.tipo][$3.tipo];
-				if($$.tipo == "erro") yyerror("Operação com tipos inválidos");
+				if($$.tipo == "erro" || $$.tipo == "string") yyerror("Operação com tipos inválidos");
 
     			$$.traducao = $1.traducao + $3.traducao + traducaoTemp +
                   	"\t" + $$.label + " = " + $1.label + " - " + $3.label + ";\n";
 
-    			declarar($$.tipo, $$.label);
+    			declarar($$.tipo, $$.label, -1);
 			}
 			| E '*' E
 			{
@@ -377,12 +413,12 @@ E 			: '(' E ')'
     			$$.label = gentempcode();
     			
 				$$.tipo = tipofinal[$1.tipo][$3.tipo];
-				if($$.tipo == "erro") yyerror("Operação com tipos inválidos");
+				if($$.tipo == "erro" || $$.tipo == "string") yyerror("Operação com tipos inválidos");
 
     			$$.traducao = $1.traducao + $3.traducao + traducaoTemp +
                   	"\t" + $$.label + " = " + $1.label + " * " + $3.label + ";\n";
 
-    			declarar($$.tipo, $$.label);			
+    			declarar($$.tipo, $$.label, -1);			
 			}
 			| E '/' E
 			{
@@ -393,25 +429,25 @@ E 			: '(' E ')'
 				$$.label = gentempcode();
     			
 				$$.tipo = tipofinal[$1.tipo][$3.tipo];
-				if($$.tipo == "erro") yyerror("Operação com tipos inválidos");
+				if($$.tipo == "erro" || $$.tipo == "string") yyerror("Operação com tipos inválidos");
 
     			$$.traducao = $1.traducao + $3.traducao + traducaoTemp + "\t" + $$.label + " = " + $1.label + " / " + $3.label + ";\n";
 
-    			declarar($$.tipo, $$.label);
+    			declarar($$.tipo, $$.label, -1);
 			}
 			| TK_FLOAT
 			{
 				$$.label = gentempcode();
 				$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
 				$$.tipo = "float";
-				declarar($$.tipo, $$.label);
+				declarar($$.tipo, $$.label, -1);
 			}
 			| TK_NUM
 			{
 				$$.label = gentempcode();
 				$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
 				$$.tipo = "int";
-				declarar($$.tipo, $$.label);
+				declarar($$.tipo, $$.label, -1);
 			}
 			| TK_ID
 			{
@@ -427,7 +463,8 @@ E 			: '(' E ')'
 				$$.label = variavel.label;
 				$$.traducao = "";
 				$$.tipo = variavel.tipo;
-				
+				$$.tamanho = variavel.tamanho;
+				$$.vetor_string = variavel.vetor_string;				
 			}
 			| TK_CHAR
 			{
@@ -435,7 +472,7 @@ E 			: '(' E ')'
 				$$.label = gentempcode();
 				$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
 				$$.tipo = "char";
-				declarar($$.tipo, $$.label);
+				declarar($$.tipo, $$.label, -1);
 			}
 			| TK_BOOL
 			{
@@ -458,48 +495,52 @@ E 			: '(' E ')'
             	$$.label = gentempcode();
        			$$.traducao = $1.traducao + $3.traducao + traducaoTemp + "\t" + $$.label + " = " + $1.label + " " + $2.label + " " + $3.label + ";\n";
         		$$.tipo = "bool";
-        		declarar($$.tipo, $$.label);
+        		declarar($$.tipo, $$.label, -1);
         	}
             | E TK_ORLOGIC E
     		{
    				$$.label = gentempcode();
         		$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + " = " + $1.label + " " + $2.label + " " + $3.label + ";\n";
         		$$.tipo = "bool";
-    			declarar($$.tipo, $$.label);
+    			declarar($$.tipo, $$.label, -1);
         	}
             | E TK_ANDLOGIC E
         	{
         		$$.label = gentempcode();
         		$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + " = " + $1.label + " " + $2.label + " " + $3.label + ";\n";
         		$$.tipo = "bool";
-        		declarar($$.tipo, $$.label);
+        		declarar($$.tipo, $$.label, -1);
             }
             | TK_NOLOGIC E
             {
 		    	$$.label = gentempcode();
         		$$.traducao = $2.traducao + "\t" + $$.label + " = !" + $2.label +  ";\n";
         		$$.tipo = "bool";
-        		declarar($$.tipo, $$.label);
+        		declarar($$.tipo, $$.label, -1);
         	}
 	    	| TK_CAST E
 	    	{
 				string temp1 = gentempcode();
     			string temp2 = gentempcode();
 
-    			declarar($2.tipo, temp1);
-    			declarar($1.tipo, temp2);
+    			declarar($2.tipo, temp1, -1);
+    			declarar($1.tipo, temp2, -1);
 
     			$$.traducao = $2.traducao +	"\t" + temp1 + " = " + $2.label + ";\n" +"\t" + temp2 + " = " + "(" + $1.tipo + ")" + temp1 + ";\n";
 
     			$$.label = temp2;
     			$$.tipo = $1.tipo;
 	    	}
-			| TK_CADEIA_CHAR
+			|TK_CADEIA_CHAR
 			{
 				int tamString = tamanho_string($1.label);
 				traducaoTemp = retirar_aspas($1.label, tamString);
 
 				$$.label = gentempcode();
+				$$.tipo = "string";
+				$$.tamanho = to_string(tamString);
+				$$.vetor_string = traducaoTemp;
+
 				for(int i = 0; i < tamString; i++){
 					if(i != tamString - 1) 
 					{
@@ -508,13 +549,34 @@ E 			: '(' E ')'
 					{
 						$$.traducao += "\t" + $$.label + "[" + to_string(i) + "] = '\\0';\n";
 					}
-					
 				}
-				declaracoes.push_back("\tchar " + $$.label + "[" + to_string(tamString) + "]" + ";\n");
+
+				declarar($$.tipo, $$.label, tamString);
 			}
-		    ;
+			| TK_CPY '(' E ',' E ')'
+			{
+				if(tipofinal[$3.tipo][$5.tipo] != "string") yyerror("Operação com tipos inválidos");
+				if(stoi($3.tamanho) < stoi($5.tamanho)) yyerror("Operação de copy inválida, espaço no BUFFER insuficiente");
+				
+				traducaoTemp = "";
+
+				$$.label = gentempcode();
+				$$.tipo = "string";
+				int tam1 = stoi($3.tamanho);
+				$$.tamanho = $3.tamanho;
 
 
+				for(int i = 0; i < tam1; i++){
+					if(i == tam1 - 1){
+						traducaoTemp += "\t" + $$.label + "[" + to_string(i) + "] = " + "'\\0'" + ";\n";
+					} else{
+						traducaoTemp += "\t" + $$.label + "[" + to_string(i) + "] = " + $5.vetor_string[i] + ";\n";
+					}
+				}
+				$$.traducao = "\t" + $$.label + " = strcpy(" + $3.vetor_string + ", " + $5.vetor_string + ");\n" + traducaoTemp;
+				declarar($$.tipo, $$.label, tam1);
+			}
+			;
 %%
 
 #include "lex.yy.c"
@@ -537,11 +599,14 @@ int main(int argc, char* argv[])
 	tipofinal["int"]["int"] = "int";
 	tipofinal["float"]["int"] = "float";
 	tipofinal["float"]["float"] = "float";
+	tipofinal["string"]["string"] = "string";
 	tipofinal["int"]["float"] = "float";
 	tipofinal["char"]["int"] = "char";
 	tipofinal["int"]["char"] = "char";
 	tipofinal["char"]["char"] = "char";
 	tipofinal["bool"]["bool"] = "bool";
+	tipofinal["string"]["char"] = "string";
+	tipofinal["char"]["string"] = "string";
 	tipofinal["bool"]["int"] = "erro";
 	tipofinal["int"]["bool"] = "erro";
 	tipofinal["float"]["char"] = "erro";
@@ -550,6 +615,12 @@ int main(int argc, char* argv[])
 	tipofinal["char"]["bool"] = "erro";
 	tipofinal["bool"]["float"] = "erro";
 	tipofinal["float"]["bool"] = "erro";
+	tipofinal["string"]["bool"] = "erro";
+	tipofinal["bool"]["string"] = "erro";
+	tipofinal["string"]["int"] = "erro";
+	tipofinal["int"]["string"] = "erro";
+	tipofinal["string"]["float"] = "erro";
+	tipofinal["float"]["string"] = "erro";
 
 	yyparse();
 
@@ -578,13 +649,22 @@ Simbolo buscar(string name)
 		auto it = tabela[i].find(name);
 		if(!(it == tabela[i].end())) return it->second;
 	}
-
+	yyerror("Não foi encontrado o símbolo durante a busca!");
 }
 
-void declarar(string tipo, string label) 
+void declarar(string tipo, string label, int tam_string) 
 {
 	if (tipo == "bool") tipo = "int";
+	if (tipo == "string") tipo = "char";
+	
+	if(tam_string != -1) // Quando o campo de tamanho for -1, quer dizer que não estamos declarando uma string
+	{
+		declaracoes.push_back("\t" + tipo + " " + label + "[" + to_string(tam_string) + "]" + ";\n");
+	}
+	else
+	{
 	declaracoes.push_back("\t" + tipo + " " + label + ";\n");
+	}
 }
 
 string cast_implicito(atributos* no1, atributos* no2, atributos* no3, string tipo)
@@ -600,13 +680,13 @@ string cast_implicito(atributos* no1, atributos* no2, atributos* no3, string tip
 			
         	if (no2->tipo == "int" && no3->tipo == "float") {
         		no1->label = gentempcode();
-        		declarar("float", no1->label);
+        		declarar("float", no1->label, -1);
         		traducaoTemp += "\t" + no1->label + " = (float)" + no2->label + ";\n";
         		no2->label = no1->label;
 				no2->tipo = "float";
        		} else if (no2->tipo == "float" && no3->tipo == "int") {
 				no1->label = gentempcode();
-        		declarar("float", no1->label);
+        		declarar("float", no1->label, -1);
         		traducaoTemp += "\t" + no1->label + " = (float)" + no3->label + ";\n";
         		no3->label = no1->label;
         		no3->tipo = "float";
@@ -618,12 +698,12 @@ string cast_implicito(atributos* no1, atributos* no2, atributos* no3, string tip
 			
         	if (no2->tipo == "int" && no3->tipo == "float") {
         		no1->label = gentempcode();
-        		declarar("int", no1->label);
+        		declarar("int", no1->label, -1);
         		traducaoTemp += "\t" + no1->label + " = (int)" + no3->label + ";\n";
 				no3->label = no1->label;
     		} else if (no2->tipo == "float" && no3->tipo == "int") {
 				no1->label = gentempcode();
-        		declarar("float", no1->label);
+        		declarar("float", no1->label, -1);
         		traducaoTemp += "\t" + no1->label + " = (float)" + no3->label + ";\n";
 				no3->label = no1->label;
         	} 
@@ -632,13 +712,15 @@ string cast_implicito(atributos* no1, atributos* no2, atributos* no3, string tip
 	return traducaoTemp;
 }
 
-void atualizar(string tipo, string nome) {
+void atualizar(string tipo, string nome, string tamanho, string cadeia_char) {
 
 	for(int i = tabela.size() - 1; i >= 0; i--) {
 		auto it = tabela[i].find(nome);
 		if(!(it == tabela[i].end())) {
 			it->second.tipo = tipo;
 			it->second.tipado = true;
+			it->second.tamanho = tamanho;
+			it->second.vetor_string = cadeia_char;
 			break;
 		}
 	}

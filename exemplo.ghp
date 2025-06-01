@@ -1,10 +1,26 @@
 def main {
     var a;
     var b;
-    var c;
 
-    a = "guga";
-    b = "tico";
-    strcpy(a, b);
+    a = 2;
+    b = 3;
+
+    switch(a) {
+        case 1 :
+            switch(b) {
+                case 1 :
+                    b = 1;
+                    break;
+                default :
+                    b = 0;
+            }
+            a = 3;
+            break;
+        case 2 :
+            a = 1;
+            break;
+        default :
+            a = 0;
+    }
     
 }

@@ -24,15 +24,18 @@ CAST ("(float)"|"(int)"|"(bool)"|"(char)")
     
 "\n"		  {}
     
-{DELIM} 	  {}
-"if"          {return TK_IF;}
-"then"        {return TK_THEN;}
-"else"        {return TK_ELSE;}
-"while"       {return TK_WHILE;}
-"do"          {return TK_DO;}
-"for"         {return TK_FOR;}
-"break"       {return TK_BREAK;}
-"continue"    {return TK_CONTINUE;}
+{DELIM} 	{}
+"if"        {return TK_IF;}
+"then"      {return TK_THEN;}
+"else"      {return TK_ELSE;}
+"while"     {return TK_WHILE;}
+"do"        {return TK_DO;}
+"for"       {return TK_FOR;}
+"break"     {return TK_BREAK;}
+"continue"  {return TK_CONTINUE;}
+"switch"    {return TK_SWITCH;}
+"case"      {return TK_CASE;}
+"default"   {return TK_DEFAULT;}
 
 "def"         {return TK_DEF;}
 
@@ -40,7 +43,7 @@ CAST ("(float)"|"(int)"|"(bool)"|"(char)")
     
 "var"         {return TK_VAR;}
     
-[(){}[\];,]	  { return *yytext; }
+[(){}[\]:;,]	{ return *yytext; }
     
 [+\-*/]		  { return *yytext; }
     

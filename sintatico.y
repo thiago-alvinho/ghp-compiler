@@ -32,6 +32,24 @@ struct atributos
 	string vetor_string = "";
 };
 
+struct CaseInfo {
+    string constant_value_label;
+    string constant_value_type;
+    string code_target_label;
+	string traducao_exp_case;
+};
+
+struct DefaultInfo {
+    bool exists = false;
+    string code_target_label;
+};
+
+struct SwitchContext {
+    std::vector<CaseInfo> cases; 
+    DefaultInfo default_info;
+    std::string end_label;
+};
+
 vector<string> declaracoes;
 vector<unordered_map<string, Simbolo>> tabela;
 vector<string> break_label_stack;
@@ -40,6 +58,10 @@ vector<string> rotulo_condicao;
 vector<string> rotulo_inicio;
 vector<string> rotulo_fim;
 vector<string> rotulo_incremento;
+static vector<CaseInfo> g_current_switch_cases;
+static DefaultInfo g_current_switch_default_info;
+static string g_current_switch_end_label;
+static vector<SwitchContext> g_switch_context_stack;
 
 map<string, map<string, string>> tipofinal;
 
@@ -58,13 +80,14 @@ void retirarEscopo();
 void adicionarEscopo();
 string genlabel();
 void retirar_rotulos();
+void desempilhar_contexto_case();
 
 
 %}
 
 %token TK_NUM TK_FLOAT TK_CHAR TK_BOOL TK_RELACIONAL TK_ORLOGIC TK_ANDLOGIC TK_NOLOGIC TK_CAST TK_VAR TK_CADEIA_CHAR
 %token TK_MAIN TK_DEF TK_ID TK_IF TK_THEN TK_ELSE TK_WHILE TK_DO TK_FOR TK_BREAK TK_CONTINUE TK_CPY
-%token TK_FIM TK_ERROR
+%token TK_FIM TK_ERROR TK_SWITCH TK_CASE TK_DEFAULT
 
 %start S
 
@@ -153,6 +176,26 @@ RETIRAR_ROTULOS     :
 
                     }
                     ;
+SWITCH_SETUP :
+             {
+                 SwitchContext current_switch_details;
+                 current_switch_details.end_label = genlabel();
+                 
+                 break_label_stack.push_back(current_switch_details.end_label);
+
+                 g_switch_context_stack.push_back(current_switch_details);
+             }
+             ;
+SWITCH_CLEANUP :
+               {
+                   if (!break_label_stack.empty()) {
+                       break_label_stack.pop_back();
+                   } else {
+                       yyerror("PANICO: Pilha de break vazia no cleanup do switch");
+                   }
+
+               }
+               ;
 COMANDO 	: E ';'
 			{
 				$$ = $1;
@@ -290,7 +333,104 @@ COMANDO 	: E ';'
                 $$.tipo = ""; 
 				$$.label = "";
 			}
-			;
+			| TK_SWITCH '(' E ')' SWITCH_SETUP '{' CASE_STATEMENTS_LIST '}' SWITCH_CLEANUP
+			{
+				if (g_switch_context_stack.empty()) {
+                	yyerror("Erro critico: Contexto de switch nao encontrado ao finalizar o switch.");
+                	$$.traducao = "";
+            	} else {
+                	const SwitchContext& current_context = g_switch_context_stack.back();
+
+                	string switch_expr_traducao = $3.traducao;
+                	string switch_expr_val_label = $3.label;
+                	string switch_expr_tipo = $3.tipo;
+
+                	string dispatch_code;
+                	string case_bodies_code = $7.traducao;
+
+                for (const auto& ci : current_context.cases) {
+                	if (tipofinal[switch_expr_tipo][ci.constant_value_type] == "float" || tipofinal[switch_expr_tipo][ci.constant_value_type] == "erro") {
+                    	yyerror("Erro Semantico: Switch ou case de tipos incompativeis.");
+               	 	}
+
+                	string temp_cond = gentempcode();
+                    declarar("bool", temp_cond);
+					dispatch_code += ci.traducao_exp_case;
+                    dispatch_code += "\t" + temp_cond + " = (" + switch_expr_val_label + " == " + ci.constant_value_label + ");\n";
+                    dispatch_code += string("\t") + "if (" + temp_cond + ") goto " + ci.code_target_label + ";\n";
+                }
+
+                if (current_context.default_info.exists) {
+                    dispatch_code += "\tgoto " + current_context.default_info.code_target_label + ";\n";
+                } else {
+                    dispatch_code += "\tgoto " + current_context.end_label + ";\n";
+                }
+
+                $$.traducao = switch_expr_traducao + dispatch_code + case_bodies_code + current_context.end_label + ":\n";
+
+				desempilhar_contexto_case();
+                $$.tipo = "";
+                $$.label = "";
+            }
+        }
+        ;
+
+CASE_STATEMENTS_LIST :
+                     {
+                         $$.traducao = "";
+                     }
+                     | CASE_STATEMENTS_LIST_NON_EMPTY
+                     ;
+CASE_STATEMENTS_LIST_NON_EMPTY : CASE_OR_DEFAULT_ITEM
+                               | CASE_STATEMENTS_LIST_NON_EMPTY CASE_OR_DEFAULT_ITEM
+                                 { $$.traducao = $1.traducao + $2.traducao; }
+                               ;
+CASE_OR_DEFAULT_ITEM : CASE_CLAUSE
+                     | DEFAULT_CLAUSE
+                     ;
+
+CASE_CLAUSE : TK_CASE E ':' COMANDOS
+            {
+                if ($2.tipo != "int" && $2.tipo != "char" && $2.tipo != "bool") {
+                    yyerror("Erro Semantico: Constante do 'case' deve ser do tipo int, char ou bool. Encontrado: " + $2.tipo);
+                }
+
+                if (g_switch_context_stack.empty()) {
+                    yyerror("Erro critico: 'case' encontrado fora de um contexto de switch ativo.");
+        
+                } else {
+                    CaseInfo ci;
+                    ci.constant_value_label = $2.label;
+                    ci.constant_value_type = $2.tipo;
+                    ci.code_target_label = genlabel();
+					ci.traducao_exp_case = $2.traducao;
+                    g_switch_context_stack.back().cases.push_back(ci);
+
+                    $$.traducao = ci.code_target_label + ":\n" + $4.traducao;
+                    $$.label = ci.code_target_label;
+                    $$.tipo = "";
+                }
+            }
+            ;
+
+DEFAULT_CLAUSE : TK_DEFAULT ':' COMANDOS
+               {
+                   if (g_switch_context_stack.empty()) {
+                       yyerror("Erro critico: 'default' encontrado fora de um contexto de switch ativo.");
+                   } else {
+                       SwitchContext& current_active_switch = g_switch_context_stack.back();
+                       if (current_active_switch.default_info.exists) {
+                           yyerror("Erro Semantico: Multiplos 'default' no mesmo switch.");
+                       }
+                       current_active_switch.default_info.exists = true;
+                       current_active_switch.default_info.code_target_label = genlabel();
+
+                       $$.traducao = current_active_switch.default_info.code_target_label + ":\n" + $3.traducao;
+                       $$.label = current_active_switch.default_info.code_target_label;
+                       $$.tipo = "";
+                   }
+               }
+               ;
 ATRI 		:TK_ID '=' E
 			{
 				traducaoTemp = "";
@@ -799,4 +939,11 @@ string retirar_aspas(string traducao, int tamanho){
 	}	
 
 	return traducaoTemp;
+}
+void desempilhar_contexto_case() {
+	if (!g_switch_context_stack.empty()) {
+        g_switch_context_stack.pop_back();
+	} else {
+        yyerror("PANICO: Pilha de contexto de switch vazia no cleanup");
+    }
 }

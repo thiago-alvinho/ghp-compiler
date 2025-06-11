@@ -1,6 +1,9 @@
 def main {
     var b;
     b = 1;
-    output(b + "horroroso");
+    var a;
+    a = 2;
+    output(b + "Gustavo" + "tico" + "vai dormir!" + a
+    + b + "pulei");
     
 }

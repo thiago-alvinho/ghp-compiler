@@ -526,7 +526,7 @@ OUTPUT		: OUTPUT '+' TK_ID
 				if(!verificar($3.label)) yyerror("Erro Semantico: Variavel '" + $3.label + "' nao declarada para output.");
 
 				Simbolo variavel = buscar($3.label);
-				if(variavel.tipado == false) yyerror("Erro Semantico: Variavel '" + $1.label + "' nao foi tipada.");
+				if(variavel.tipado == false) yyerror("Erro Semantico: Variavel '" + $3.label + "' nao foi tipada.");
 
                 string format_specifier;
                 if (variavel.tipo == "int" || variavel.tipo == "bool") {

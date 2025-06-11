@@ -1,14 +1,10 @@
+
 def main {
-    var b;
-    b = 1;
     var a;
-<<<<<<< HEAD
-    a = 12;
-    output("o valor de a eh" + a);
-=======
-    a = 2;
-    output(b + "Gustavo" + "tico" + "vai dormir!" + a
-    + b + "pulei");
->>>>>>> 1e67e85524eb07947fefb94b97a4e5579912cd14
+    var i;
     
+    for(i = 0; i < 5; i = i + 1) {
+        a = input(%c);
+        output("Caracter digitado: " + a);
+    }
 }

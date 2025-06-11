@@ -101,7 +101,7 @@ string string_intermediario(string buffer, string tamanho, string cond, string l
 
 %%
 
-S 			:TK_DEF TK_MAIN BLOCO
+S 			:LISTA_COMANDOS_GLOBAIS TK_DEF TK_MAIN BLOCO
 			{
 				string codigo = "/*Compilador GHP*/\n"
 								"#include <iostream>\n"
@@ -113,13 +113,34 @@ S 			:TK_DEF TK_MAIN BLOCO
 					codigo += declaracoes[i];
 				}	
 
-				codigo += "\n" + $3.traducao;
+				codigo += "\n" + $1.traducao;
+
+				codigo += "\n" + $4.traducao;
 								
 				codigo += 	"\n\treturn 0;"
 							"\n}";
 
 				cout << codigo << endl;
-			};
+			}
+			;
+LISTA_COMANDOS_GLOBAIS : 
+						{
+							$$.traducao = "";
+						}
+						| LISTA_COMANDOS_GLOBAIS COMANDO_GLOBAL
+						{
+							$$.traducao = $1.traducao + $2.traducao;
+						}
+						;
+COMANDO_GLOBAL : DEC ';'
+				{
+
+				}
+				| ATRI ';'
+				{
+
+				}
+				;
 BLOCO		: '{'{ adicionarEscopo();} COMANDOS '}'
 			{
 				$$.traducao = $3.traducao;
@@ -636,7 +657,7 @@ DEC			:TK_VAR TK_ID
 				$$.tamanho = "";
 				$$.vetor_string = "";
 
-			}
+			};
 
 
 E 			: '(' E ')'
@@ -1086,6 +1107,7 @@ void desempilhar_contexto_case() {
 string string_intermediario(string buffer, string tamanho, string cond, string label)
 {
     string temp = gentempcode();
+	declarar("char", temp, -1);
     string saida = "";
 	saida += "\n\t" + tamanho + " = 0;\n"; // Inicializa o contador de tamanho
 	saida += "\t" + label + ":\n"; // Rótulo de início do loop

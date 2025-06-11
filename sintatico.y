@@ -72,7 +72,7 @@ bool verificar(string name);
 Simbolo buscar(string name);
 void declarar(string tipo, string label, int tam_string);
 string cast_implicito(atributos* no1, atributos* no2, atributos* no3, string tipo);
-void atualizar(string tipo, string nome, string tamanho, string cadeia_char);
+void atualizar(string tipo, string nome, string tamanho, string cadeia_char, string atualiza_label);
 int tamanho_string(string traducao);
 string retirar_aspas(string traducao, int tamanho);
 void adicionarSimbolo(string nome);
@@ -82,15 +82,13 @@ string genlabel();
 void retirar_rotulos();
 void desempilhar_contexto_case();
 string string_intermediario(string buffer, string tamanho, string cond, string label);
-string output_intermediario(string label, string tipo);
-
 
 %}
 
-%token TK_NUM TK_FLOAT TK_CHAR TK_BOOL TK_RELACIONAL TK_ORLOGIC TK_ANDLOGIC TK_NOLOGIC TK_CAST TK_VAR TK_CADEIA_CHAR
+%token TK_NUM TK_FLOAT TK_CHAR TK_BOOL TK_RELACIONAL TK_ORLOGIC TK_ANDLOGIC TK_NOLOGIC TK_CAST TK_VAR TK_CADEIA_CHAR TK_TIPO_INPUT
 %token TK_MAIN TK_DEF TK_ID TK_IF TK_THEN TK_ELSE TK_WHILE TK_DO TK_FOR TK_BREAK TK_CONTINUE TK_CPY TK_INPUT TK_OUTPUT
-%token TK_FIM TK_ERROR TK_SWITCH TK_CASE TK_DEFAULT
-
+%token TK_SWITCH TK_CASE TK_DEFAULT
+// TK_FIM TK_ERROR
 %start S
 
 %left TK_ORLOGIC
@@ -375,15 +373,15 @@ COMANDO 	: E ';'
                 $$.label = "";
             	}
         	}
-			| TK_OUTPUT '(' E ')' ';' 
+			| TK_OUTPUT '(' OUTPUT ')' ';' 
             {	
                 
-                $$.traducao = $3.traducao + "\tprintf(" + $3.label + ");\n";
+                $$.traducao = $3.traducao;
                 
                 $$.tipo = "";
                 $$.label = "";
             }
-			| TK_ID '=' TK_INPUT '(' E ')' ';' // Nova regra para 'a = input(conteudo);'
+			| TK_ID '=' TK_INPUT '(' TK_TIPO_INPUT ')' ';' 
             {
                 if(!verificar($1.label)) {
                     yyerror("Erro Semantico: Variavel '" + $1.label + "' nao declarada para input.");
@@ -391,54 +389,79 @@ COMANDO 	: E ';'
 
                 Simbolo variavel_destino = buscar($1.label); // Obtém informações da variável de destino
 
-                traducaoTemp = "";
                 // traducaoTemp += $5.traducao; ver se precisa (vai imprimir a string em questão)
 
-                // 2. Lógica para determinar o tipo de leitura e gerar o código C++
-                if ($5.tipo == "string") {
-                    
-                    if (variavel_destino.tipado == false) {
-                        atualizar("string", $1.label, $5.tamanho, $5.vetor_string);
-                        declarar("string", variavel_destino.label, stoi($5.tamanho));
-                        variavel_destino = buscar($1.label);
-                    } else if (variavel_destino.tipo != "string") {
+				if($5.tipo == "string"){
+					if (variavel_destino.tipo != "string" && variavel_destino.tipado == true) {
                         yyerror("Erro Semantico: Variavel '" + $1.label + "' do tipo " + variavel_destino.tipo + " nao pode receber input de string.");
-                    } else if (stoi(variavel_destino.tamanho) < stoi($5.tamanho)) {
-                        yyerror("Erro Semantico: Buffer da variavel '" + $1.label + "' (" + variavel_destino.tamanho + ") eh menor que o tamanho de input solicitado (" + $5.tamanho + ").");
-                    }
-				   	string label = genlabel();
-					string bool_temp = gentempcode();
-					string tamanho_temp = gentempcode();
-					declarar("bool", bool_temp, -1);
-					declarar("int", tamanho_temp, -1);
-				   	traducaoTemp += string_intermediario($5.label, tamanho_temp, bool_temp, label);
-                    
+					}
+					string tamanho = gentempcode();
+					declarar("int", tamanho, -1);
+					string buffer = gentempcode();
+					declarar("char*", buffer, -1);
+					string cond = gentempcode();
+					declarar("bool", cond, -1);
+					string label = genlabel();
 
-                } else if ($5.tipo == "int" || $5.tipo == "float" || $5.tipo == "char" || $5.tipo == "bool") {
-
-                    // 2.1. Se a variável de destino ainda não foi tipada, tipa com o tipo inferido
-					
-						if (variavel_destino.tipado == false) {
-							atualizar($5.tipo, $1.label, "", "");
-							declarar($5.tipo, variavel_destino.label, -1);
-							variavel_destino = buscar($1.label); // Atualiza o objeto local
-						} 
-
-						// 2.2. Verificar compatibilidade de tipos para a atribuição
-						// Se o tipo do $5.tipo pode ser implicitamente convertido para variavel_destino.tipo
-						if (tipofinal[variavel_destino.tipo][$5.tipo] == "erro" && variavel_destino.tipo != $5.tipo) {
-							yyerror("Erro Semantico: Tipo de entrada sugerido (" + $5.tipo + ") incompativel com tipo da variavel '" + variavel_destino.label + "' (" + variavel_destino.tipo + ").");
-						} 
+					string temp_ponteiro = gentempcode();
 				
-                } else {
-                    yyerror("Erro Semantico: Argumento invalido para 'input()'. Esperado literal numerico para tamanho de string ou literal de tipo.");
-                } 
 
-                traducaoTemp += "\t" + output_intermediario($1.label, variavel_destino.tipo) +";\n";
-                $$.traducao = traducaoTemp;
-                $$.tipo = "";
-                $$.label = "";
+					declarar("char*", temp_ponteiro, -1);
+					atualizar("string", $1.label, tamanho, "", temp_ponteiro);
+
+					$$.traducao += "\t" + buffer + " = malloc(256);\n" +
+					"\tfgets(" + buffer + ", 256, stdin);\n" +
+					string_intermediario(buffer, tamanho, cond, label) +
+					"\t" + temp_ponteiro + " = malloc(" + tamanho + ");\n" +
+					"\tstrcpy(" + temp_ponteiro + ", " + buffer + ");\n" +
+					"\tfree(" + buffer + ");\n";
+
+					$$.label = temp_ponteiro;
+				}
+
+				if($5.tipo == "int" || $5.tipo == "float" || $5.tipo == "char"){
+					if(variavel_destino.tipo != $5.tipo && variavel_destino.tipado == true){
+						yyerror("Erro Semantico: Variavel '" + $1.label + "' do tipo " + variavel_destino.tipo + " nao pode receber input de " + $5.tipo + ".");
+					}
+
+					string var = gentempcode();
+					declarar($5.tipo, var, -1);
+					$$.traducao += "\tscanf(\"" + $5.label + "\", &" + var + ");\n";
+
+					atualizar($5.tipo, $1.label, "", "", var);
+					$$.label = var;
+				}
+
+                $$.tipo = $5.tipo;
             }
+			| TK_CPY '(' TK_ID ',' TK_ID ')'
+			{	
+				Simbolo simbolo1 = buscar($3.label);
+				Simbolo simbolo2 = buscar($5.label);
+				int tam1 = stoi(simbolo1.tamanho);
+				int tam2 = stoi(simbolo2.tamanho);
+				if(tipofinal[simbolo1.tipo][simbolo2.tipo] != "string") yyerror("Operação com tipos inválidos");
+				if(tam1 < tam2) yyerror("Operação de copy inválida, espaço no BUFFER insuficiente"); 
+				
+				traducaoTemp = "";
+
+				$$.label = gentempcode();
+				$$.tipo = "string";
+				$$.tamanho = tam1;
+
+				for(int i = 0; i < tam1; i++){
+					if(i == tam1 - 1){
+						traducaoTemp += "\t" + $$.label + "[" + to_string(i) + "] = " + "'\\0'" + ";\n";
+					} else if(i >= tam2 - 1 && tam2 <= tam1){
+						traducaoTemp += "\t" + $$.label + "[" + to_string(i) + "] = '" + simbolo1.vetor_string[i] + "';\n";
+					} else{
+						traducaoTemp += "\t" + $$.label + "[" + to_string(i) + "] = '" + simbolo2.vetor_string[i] + "';\n";
+					}
+				}
+				
+				$$.traducao = "\tstrcpy(" + $$.label + ", " + simbolo2.label + ");\n" + traducaoTemp;
+				declarar($$.tipo, $$.label, tam1);
+			}
         	;
 
 CASE_STATEMENTS_LIST :
@@ -497,6 +520,68 @@ DEFAULT_CLAUSE : TK_DEFAULT ':' COMANDOS
                    }
                }
                ;
+
+OUTPUT		: OUTPUT '+' TK_ID
+			{
+				if(!verificar($3.label)) yyerror("Erro Semantico: Variavel '" + $3.label + "' nao declarada para output.");
+
+				Simbolo variavel = buscar($3.label);
+				if(variavel.tipado == false) yyerror("Erro Semantico: Variavel '" + $3.label + "' nao foi tipada.");
+
+                string format_specifier;
+                if (variavel.tipo == "int" || variavel.tipo == "bool") {
+                    format_specifier = "%d";
+                } else if (variavel.tipo == "float") {
+                    format_specifier = "%f";
+                } else if (variavel.tipo == "char") {
+                    format_specifier = "%c";
+                } else if (variavel.tipo == "string") {
+                    format_specifier = "%s";
+                } else {
+                    yyerror("Erro Semantico: Tipo de variavel '" + variavel.tipo + "' nao suportado para output.");
+                }
+
+                $$.traducao = $1.traducao + "\tprintf(\"" + format_specifier + "\", " + variavel.label + ");\n";
+                $$.label = ""; // Resetar label/tipo se não for relevante para o pai
+                $$.tipo = "";
+			}
+			| OUTPUT '+' TK_CADEIA_CHAR
+			{
+				$$.traducao = $1.traducao + "\tprintf(" + $3.label + ");\n";
+                $$.label = "";
+                $$.tipo = "";
+			}
+			| TK_ID
+			{
+				if(!verificar($1.label)) yyerror("Erro Semantico: Variavel '" + $1.label + "' nao declarada para output.");
+	
+				Simbolo variavel = buscar($1.label);
+				if(variavel.tipado == false) yyerror("Erro Semantico: Variavel '" + $1.label + "' nao foi tipada.");
+
+                string format_specifier;
+                if (variavel.tipo == "int" || variavel.tipo == "bool") {
+                    format_specifier = "%d";
+                } else if (variavel.tipo == "float") {
+                    format_specifier = "%f";
+                } else if (variavel.tipo == "char") {
+                    format_specifier = "%c";
+                } else if (variavel.tipo == "string") {
+                    format_specifier = "%s";
+                } else {
+                    yyerror("Erro Semantico: Tipo de variavel '" + variavel.tipo + "' nao suportado para output.");
+                }
+
+                $$.traducao = "\tprintf(\"" + format_specifier + "\", " + variavel.label + ");\n";
+                $$.label = "";
+                $$.tipo = "";
+			}
+			| TK_CADEIA_CHAR
+			{
+				$$.traducao = "\tprintf(" + $1.label + ");\n";
+                $$.label = "";
+                $$.tipo = "";
+			}
+			;
 ATRI 		:TK_ID '=' E
 			{
 				traducaoTemp = "";
@@ -510,11 +595,13 @@ ATRI 		:TK_ID '=' E
 
 				if(variavel.tipado == false) {
 					if($3.tipo == "string" ){
-						atualizar($3.tipo, $1.label, $3.tamanho, $3.vetor_string);
+						atualizar($3.tipo, $1.label, $3.tamanho, $3.vetor_string, "");
 						declarar($3.tipo, variavel.label, stoi($3.tamanho));
 						variavel.tipo = $3.tipo;
+						$1.tamanho = $3.tamanho;
+						$1.vetor_string = $3.vetor_string;
 					}else{
-						atualizar($3.tipo, $1.label, "", "");
+						atualizar($3.tipo, $1.label, "", "", "");
 						declarar($3.tipo, variavel.label, -1);
 						variavel.tipo = $3.tipo;
 					}
@@ -527,7 +614,11 @@ ATRI 		:TK_ID '=' E
 
 				traducaoTemp = cast_implicito(&$$, &$1, &$3, "atribuicao");
 
+				if($1.tipo == "string"){
+					$$.traducao = $1.traducao + $3.traducao + traducaoTemp + "\t" + "strcpy(" + $1.label + ", " + $3.label + ");\n";
+				}else{
 				$$.traducao = $1.traducao + $3.traducao + traducaoTemp + "\t" + $1.label + " = " + $3.label + ";\n";
+				}
 			}
 			;
 
@@ -575,7 +666,7 @@ E 			: '(' E ')'
 						}
 					}
 					
-					$$.traducao = "\t" + $$.label + " = strcat(" + $1.vetor_string + ", " + $3.vetor_string + ");\n" + traducaoTemp;
+					$$.traducao = "\tstrcat(" + $1.label + ", " + $3.label + ");\n" + traducaoTemp;
 					declarar($$.tipo, $$.label, tamcat);
 					
 				}
@@ -759,29 +850,6 @@ E 			: '(' E ')'
 
 				declarar($$.tipo, $$.label, tamString);
 			}
-			| TK_CPY '(' E ',' E ')'
-			{
-				if(tipofinal[$3.tipo][$5.tipo] != "string") yyerror("Operação com tipos inválidos");
-				if(stoi($3.tamanho) < stoi($5.tamanho)) yyerror("Operação de copy inválida, espaço no BUFFER insuficiente");
-				
-				traducaoTemp = "";
-
-				$$.label = gentempcode();
-				$$.tipo = "string";
-				int tam1 = stoi($3.tamanho);
-				$$.tamanho = $3.tamanho;
-
-
-				for(int i = 0; i < tam1; i++){
-					if(i == tam1 - 1){
-						traducaoTemp += "\t" + $$.label + "[" + to_string(i) + "] = " + "'\\0'" + ";\n";
-					} else{
-						traducaoTemp += "\t" + $$.label + "[" + to_string(i) + "] = " + $5.vetor_string[i] + ";\n";
-					}
-				}
-				$$.traducao = "\t" + $$.label + " = strcpy(" + $3.vetor_string + ", " + $5.vetor_string + ");\n" + traducaoTemp;
-				declarar($$.tipo, $$.label, tam1);
-			}
             ;
 %%
 
@@ -918,11 +986,12 @@ string cast_implicito(atributos* no1, atributos* no2, atributos* no3, string tip
 	return traducaoTemp;
 }
 
-void atualizar(string tipo, string nome, string tamanho, string cadeia_char) {
+void atualizar(string tipo, string nome, string tamanho, string cadeia_char, string atualiza_label) {
 
 	for(int i = tabela.size() - 1; i >= 0; i--) {
 		auto it = tabela[i].find(nome);
 		if(!(it == tabela[i].end())) {
+			if(atualiza_label != "") it->second.label = atualiza_label;
 			it->second.tipo = tipo;
 			it->second.tipado = true;
 			it->second.tamanho = tamanho;
@@ -1016,30 +1085,17 @@ void desempilhar_contexto_case() {
 
 string string_intermediario(string buffer, string tamanho, string cond, string label)
 {
-    string c = gentempcode();
-    string output = "";
-	output += "\t" + tamanho + " = 0;\n"; // Inicializa o contador de tamanho
-	output += "\t" + label + ":\n"; // Rótulo de início do loop
-	output += "\t\t" + c + " = " + buffer + "[" + tamanho + "];\n"; // Pega o caractere atual
-	output += "\t\t" + cond + " = (" + c + " != '\\0');\n"; // Verifica se o caractere não é nulo
-	output += "\t\tif (!" + cond + ") goto " + label + "_end;\n"; // Se for nulo (cond for falso), sai do loop
-	output += "\t\t" + tamanho + " = " + tamanho + " + 1;\n"; // Incrementa o tamanho
-	output += "\t\tgoto " + label + ";\n"; // Volta para o início do loop
-	output += "\t" + label + "_end:\n"; // Rótulo de fim do loop
-	output += "\t\t" + tamanho + " = " + tamanho + " + 1;\n"; // Incrementa o tamanho mais uma vez (para incluir o nulo ou compensar o último incremento)
-    return output;
-}
-
-string output_intermediario(string label, string tipo){
-	string temp = "";
-	
-	if(tipo == "int") {temp += "scanf(\"%d\", &" + label + ")";}
-
-	if(tipo == "float") {temp += "scanf(\"%f\", &" + label + ")";}
-
-	if(tipo == "char") {temp += "scanf(\"%c\", &" + label + ")";}
-
-	if(tipo == "string") {temp += "scanf(\"%s\", &" + label + ")";}
-	
-	return temp;
+    string temp = gentempcode();
+    string saida = "";
+	saida += "\n\t" + tamanho + " = 0;\n"; // Inicializa o contador de tamanho
+	saida += "\t" + label + ":\n"; // Rótulo de início do loop
+	saida += "\t\t" + temp + " = *" + buffer + ";\n"; // Pega o caractere atual
+	saida += "\t\t" + buffer + " = " + buffer + " + 1;\n";
+	saida += "\t\t" + cond + " = (" + temp + " != '\\0');\n"; // Verifica se o caractere não é nulo
+	saida += "\t\tif (!" + cond + ") goto " + label + "_end;\n"; // Se for nulo (cond for falso), sai do loop
+	saida += "\t\t" + tamanho + " = " + tamanho + " + 1;\n"; // Incrementa o tamanho
+	saida += "\t\tgoto " + label + ";\n"; // Volta para o início do loop
+	saida += "\t" + label + "_end:\n"; // Rótulo de fim do loop
+	saida += "\t\t" + tamanho + " = " + tamanho + " + 1;\n"; // Incrementa o tamanho mais uma vez (para incluir o nulo ou compensar o último incremento)
+    return saida;
 }

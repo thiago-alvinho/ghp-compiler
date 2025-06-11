@@ -104,7 +104,6 @@ string string_intermediario(string buffer, string tamanho, string cond, string l
 S 			:LISTA_COMANDOS_GLOBAIS TK_DEF TK_MAIN BLOCO
 			{
 				string codigo = "/*Compilador GHP*/\n"
-								"#include <iostream>\n"
 								"#include<string.h>\n"
 								"#include<stdio.h>\n\n"
 								"int main(void) {\n";

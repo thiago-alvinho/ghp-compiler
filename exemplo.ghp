@@ -1,10 +1,4 @@
-
 def main {
-    var a;
-    var i;
     
-    for(i = 0; i < 5; i = i + 1) {
-        a = input(%c);
-        output("Caracter digitado: " + a);
-    }
+    
 }

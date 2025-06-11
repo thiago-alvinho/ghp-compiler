@@ -687,7 +687,7 @@ E 			: '(' E ')'
 						}
 					}
 					
-					$$.traducao = "\tstrcat(" + $1.label + ", " + $3.label + ");\n" + traducaoTemp;
+					$$.traducao = traducaoTemp;
 					declarar($$.tipo, $$.label, tamcat);
 					
 				}
@@ -790,6 +790,7 @@ E 			: '(' E ')'
 				$$.label = gentempcode();
 				$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
 				$$.tipo = "char";
+				$$.tamanho = "1";
 				declarar($$.tipo, $$.label, -1);
 			}
 			| TK_BOOL

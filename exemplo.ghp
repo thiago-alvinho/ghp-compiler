@@ -1,6 +1,6 @@
 def main {
     var a;
-    
-    a = input(1);
+    a = 12;
+    output("o valor de a eh" + a);
     
 }

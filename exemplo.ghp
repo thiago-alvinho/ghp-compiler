@@ -1,6 +1,6 @@
 def main {
-    var a;
-    
-    a = input(1);
+    var b;
+    b = 1;
+    output(b + "horroroso");
     
 }

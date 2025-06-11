@@ -19,7 +19,7 @@ ORLOGIC ("||")
 ANDLOGIC ("&&")
 NOLOGIC ("!")
 CAST ("(float)"|"(int)"|"(bool)"|"(char)")
-    
+TIPO_INPUT ("%d"|"%f"|"%s"|"%c")
 %%
     
 "\n"		  {}
@@ -53,6 +53,13 @@ CAST ("(float)"|"(int)"|"(bool)"|"(char)")
 
 "strcpy"        {yylval.label = yytext; return TK_CPY;}
 
+{TIPO_INPUT}    { yylval.label = yytext; 
+                if(yylval.label == "%f") yylval.tipo = "float";
+                if(yylval.label == "%d") yylval.tipo = "int";
+                if(yylval.label == "%c") yylval.tipo = "char";
+                if(yylval.label == "%s") yylval.tipo = "string" ;
+                return TK_TIPO_INPUT;}
+
 {CAST}          { yylval.label = yytext; 
                 if(yylval.label == "(float)") yylval.tipo = "float";
                 if(yylval.label == "(int)") yylval.tipo = "int";
@@ -69,7 +76,7 @@ CAST ("(float)"|"(int)"|"(bool)"|"(char)")
 {ID}		    { yylval.label = yytext; return TK_ID;}
 {REAL}          { yylval.label = yytext; return TK_FLOAT;}
 {CHAR}          { yylval.label = yytext; return TK_CHAR;}
-{CADEIA_CHAR}   { printf("DEBUG_LEX: TK_CADEIA_CHAR -> '%s'\n", yytext); yylval.label = yytext; return TK_CADEIA_CHAR;}
+{CADEIA_CHAR}   { yylval.label = yytext; return TK_CADEIA_CHAR;}
 .			    { *yytext; }
     
 %%

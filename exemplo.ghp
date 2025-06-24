@@ -1,18 +1,11 @@
-var d;
-d = 15;
-
 def main {
     var a;
     var b;
 
-    a = 2;
+    a = "a";
+    b = "Eu!";
 
-    do {
-        var c;
-        output("Digite o numero que deseja somar a variavel a: ");
-        c = input(%d);
-        a = a + c;
-    } while (a < 5);
+    strcat(b, a);
 
-    a = a + d;
+    output(b);
 }

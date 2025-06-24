@@ -52,6 +52,7 @@ TIPO_INPUT ("%d"|"%f"|"%s"|"%c")
 "="		        { return '='; }
 
 "strcpy"        {yylval.label = yytext; return TK_CPY;}
+"strcat"        {yylval.label = yytext; return TK_CAT;}
 
 {TIPO_INPUT}    { yylval.label = yytext; 
                 if(yylval.label == "%f") yylval.tipo = "float";

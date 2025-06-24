@@ -1,36 +1,35 @@
 /*Compilador GHP*/
 #include<string.h>
+#include<stdlib.h>
 #include<stdio.h>
 
-int t2;
-int t1;
 
 int main(void) {
-	int t5;
-	int t3;
-	int t7;
-	int t8;
-	int t9;
-	int t10;
-	int t11;
+	char* t3;
+	char* t1;
+	char* t4;
+	char* t2;
+	char* t5;
 
-	t2 = 15;
-	t1 = t2;
 
-	t5 = 2;
-	t3 = t5;
-ROTULO_1:
-	printf("Digite o numero que deseja somar a variavel a: ");
-	scanf("%d", &t7);
-	t8 = t3 + t7;
-	t3 = t8;
-ROTULO_2:
-	t9 = 5;
-	t10 = t3 < t9;
-	if (t10) goto ROTULO_1;
-ROTULO_3:
-	t11 = t3 + t1;
-	t3 = t11;
+	t3 = (char *) malloc(2 * sizeof(char));
+	t3[0] = 'a';
+	t3[1] = '\0';
+	t1 = (char *) malloc(2 * sizeof(char));
+	strcpy(t1, t3);
+	t4 = (char *) malloc(4 * sizeof(char));
+	t4[0] = 'E';
+	t4[1] = 'u';
+	t4[2] = '!';
+	t4[3] = '\0';
+	t2 = (char *) malloc(4 * sizeof(char));
+	strcpy(t2, t4);
+	t5 = (char*)malloc(5);
+	strcpy(t5, t2);
+	strcat(t5, t1);
+	free(t2);
+	t2 = t5;
+	printf("%s", t2);
 
 	return 0;
 }

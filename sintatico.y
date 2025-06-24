@@ -91,7 +91,7 @@ string string_intermediario(string buffer, string tamanho, string cond, string l
 %}
 
 %token TK_NUM TK_FLOAT TK_CHAR TK_BOOL TK_RELACIONAL TK_ORLOGIC TK_ANDLOGIC TK_NOLOGIC TK_CAST TK_VAR TK_CADEIA_CHAR TK_TIPO_INPUT
-%token TK_MAIN TK_DEF TK_ID TK_IF TK_THEN TK_ELSE TK_WHILE TK_DO TK_FOR TK_BREAK TK_CONTINUE TK_CPY TK_INPUT TK_OUTPUT
+%token TK_MAIN TK_DEF TK_ID TK_IF TK_THEN TK_ELSE TK_WHILE TK_DO TK_FOR TK_BREAK TK_CONTINUE TK_CPY TK_CAT TK_INPUT TK_OUTPUT
 %token TK_SWITCH TK_CASE TK_DEFAULT
 // TK_FIM TK_ERROR
 %start S
@@ -110,6 +110,7 @@ S 			:LISTA_COMANDOS_GLOBAIS S_MAIN
 			{
 				string codigo = "/*Compilador GHP*/\n"
 								"#include<string.h>\n"
+								"#include<stdlib.h>\n"
 								"#include<stdio.h>\n\n";
 
 				for (int i = 0; i < declaracoes_globais.size(); i++) {
@@ -473,35 +474,51 @@ COMANDO 	: E ';'
 
                 $$.tipo = $5.tipo;
             }
-			| TK_CPY '(' TK_ID ',' TK_ID ')'
-			{	
-				Simbolo simbolo1 = buscar($3.label);
-				Simbolo simbolo2 = buscar($5.label);
-				int tam1 = stoi(simbolo1.tamanho);
-				int tam2 = stoi(simbolo2.tamanho);
-				if(tipofinal[simbolo1.tipo][simbolo2.tipo] != "string") yyerror("Operação com tipos inválidos");
-				if(tam1 < tam2) yyerror("Operação de copy inválida, espaço no BUFFER insuficiente"); 
-				
-				traducaoTemp = "";
+			| TK_CAT '(' TK_ID ',' TK_ID ')' ';'
+			{
+				Simbolo simbolo1 = buscar($3.label); 
+				Simbolo simbolo2 = buscar($5.label); 
 
-				$$.label = gentempcode();
-				$$.tipo = "string";
-				$$.tamanho = tam1;
-
-				for(int i = 0; i < tam1; i++){
-					if(i == tam1 - 1){
-						traducaoTemp += "\t" + $$.label + "[" + to_string(i) + "] = " + "'\\0'" + ";\n";
-					} else if(i >= tam2 - 1 && tam2 <= tam1){
-						traducaoTemp += "\t" + $$.label + "[" + to_string(i) + "] = '" + simbolo1.vetor_string[i] + "';\n";
-					} else{
-						traducaoTemp += "\t" + $$.label + "[" + to_string(i) + "] = '" + simbolo2.vetor_string[i] + "';\n";
-					}
+				if (simbolo1.label == simbolo2.label) yyerror("Nao eh possivel concatenar quando o destino e a origem são o mesmo endereço.");
+				if(tipofinal[simbolo1.tipo][simbolo2.tipo] != "string") {
+					yyerror("Operação de concatenacao com tipos inválidos");
 				}
+
+				// `stoi(simbolo1.tamanho)` é o tamanho alocado anterior, incluindo o '\0'.
+				int len1 = stoi(simbolo1.tamanho) - 1; // Conteúdo útil do destino
+				int len2 = stoi(simbolo2.tamanho) - 1; // Conteúdo útil da fonte (este não muda)
 				
-				$$.traducao = "\tstrcpy(" + $$.label + ", " + simbolo2.label + ");\n" + traducaoTemp;
-				declarar($$.tipo, $$.label, tam1);
+				// Calcular o novo tamanho total necessário para a concatenação
+				int tamcat_total_alocado = len1 + len2 + 1; 
+				string cat = simbolo1.vetor_string + simbolo2.vetor_string; 
+
+				// Gerar um novo label para a variável temporária C que conterá o resultado
+				string resultado_temp_c_label = gentempcode();
+
+				// Declara o ponteiro char* para o resultado temporário
+				declarar("char*", resultado_temp_c_label, -1); 
+
+				$$.traducao = ""; 
+
+				// Alocar memória para o NOVO temporário
+				$$.traducao += "\t" + resultado_temp_c_label + " = (char*)malloc(" + to_string(tamcat_total_alocado) + ");\n";
+
+
+				$$.traducao += "\tstrcpy(" + resultado_temp_c_label + ", " + simbolo1.label + ");\n";
+				$$.traducao += "\tstrcat(" + resultado_temp_c_label + ", " + simbolo2.label + ");\n";
+
+				$$.tipo = "string";
+				$$.tamanho = to_string(tamcat_total_alocado); 
+
+				// **CORREÇÃO AQUI:** Liberar a memória antiga do DESTINO e atribuir o NOVO ponteiro.
+				// O $3.label aqui refere-se ao nome da variável GHP ('a'), não ao seu label C (`t1`).
+				// O `simbolo1.label` é o label C atual da variável 'a' (que é 't1').
+				$$.traducao += "\tfree(" + simbolo1.label + ");\n"; // Libera a memória antiga de 'a' (t1)
+				$$.traducao += "\t" + simbolo1.label + " = " + resultado_temp_c_label + ";\n"; // 'a' (t1) agora aponta para o novo buffer
+
+				atualizar($$.tipo, $3.label, $$.tamanho, cat, simbolo1.label); 
 			}
-        	;
+			;
 
 CASE_STATEMENTS_LIST :
                      {
@@ -637,6 +654,7 @@ ATRI 		:TK_ID '=' E
 						atualizar($3.tipo, $1.label, $3.tamanho, $3.vetor_string, "");
 						declarar($3.tipo, variavel.label, stoi($3.tamanho));
 						variavel.tipo = $3.tipo;
+						variavel.tamanho = $3.tamanho;
 						$1.tamanho = $3.tamanho;
 						$1.vetor_string = $3.vetor_string;
 					}else{
@@ -654,7 +672,9 @@ ATRI 		:TK_ID '=' E
 				traducaoTemp = cast_implicito(&$$, &$1, &$3, "atribuicao");
 
 				if($1.tipo == "string"){
-					$$.traducao = $1.traducao + $3.traducao + traducaoTemp + "\t" + "strcpy(" + $1.label + ", " + $3.label + ");\n";
+					$$.traducao = $1.traducao + $3.traducao + traducaoTemp + 
+					"\t" + $1.label + " = (char *) malloc(" + $3.tamanho + " * sizeof(char));\n" +
+					"\tstrcpy(" + $1.label + ", " + $3.label + ");\n";
 				}else{
 				$$.traducao = $1.traducao + $3.traducao + traducaoTemp + "\t" + $1.label + " = " + $3.label + ";\n";
 				}
@@ -685,44 +705,19 @@ E 			: '(' E ')'
 			| E '+' E
 			{	
 				traducaoTemp = "";
+				
+				traducaoTemp = cast_implicito(&$$, &$1, &$3, "operacao");
 
-				if(tipofinal[$1.tipo][$3.tipo] == "string")
-				{	
-					$$.label = gentempcode();
-					$$.tipo = "string";
-					int tam1 = stoi($1.tamanho);
-					int tam2 = stoi($3.tamanho);
-					int tamcat = (tam1 - 1) + (tam2 - 1) + 1;
-					$$.tamanho = to_string(tamcat);
-
-					for(int i = 0; i < tamcat; i++){
-						if(i == tamcat - 1){
-							traducaoTemp += "\t" + $$.label + "[" + to_string(i) + "] = " + "'\\0'" + ";\n";
-						} else if(i < (stoi($1.tamanho)- 1)){
-							traducaoTemp += "\t" + $$.label + "[" + to_string(i) + "] = '" + $1.vetor_string[i] + "';\n";
-						} else{
-							traducaoTemp += "\t" + $$.label + "[" + to_string(i) + "] = '" + $3.vetor_string[i - (tam1 - 1)] + "';\n";
-						}
-					}
+				$$.label = gentempcode();
 					
-					$$.traducao = traducaoTemp;
-					declarar($$.tipo, $$.label, tamcat);
-					
-				}
-				else
-				{
-					traducaoTemp = cast_implicito(&$$, &$1, &$3, "operacao");
+				$$.tipo = tipofinal[$1.tipo][$3.tipo];
+				if($$.tipo == "erro") yyerror("Operação com tipos inválidos");
 
-					$$.label = gentempcode();
-					
-					$$.tipo = tipofinal[$1.tipo][$3.tipo];
-					if($$.tipo == "erro") yyerror("Operação com tipos inválidos");
+				$$.traducao = $1.traducao + $3.traducao + traducaoTemp +
+					"\t" + $$.label + " = " + $1.label + " + " + $3.label + ";\n";
 
-					$$.traducao = $1.traducao + $3.traducao + traducaoTemp +
-						"\t" + $$.label + " = " + $1.label + " + " + $3.label + ";\n";
-
-					declarar($$.tipo, $$.label, -1);
-				}
+				declarar($$.tipo, $$.label, -1);
+				
 			}
 			| E '-' E
 			{
@@ -878,6 +873,8 @@ E 			: '(' E ')'
 				$$.tamanho = to_string(tamString);
 				$$.vetor_string = traducaoTemp;
 
+				$$.traducao += "\t" + $$.label + " = (char *) malloc(" + $$.tamanho + " * sizeof(char));\n";
+
 				for(int i = 0; i < tamString; i++){
 					if(i != tamString - 1) 
 					{
@@ -919,8 +916,8 @@ int main(int argc, char* argv[])
 	tipofinal["int"]["char"] = "char";
 	tipofinal["char"]["char"] = "char";
 	tipofinal["bool"]["bool"] = "bool";
-	tipofinal["string"]["char"] = "string";
-	tipofinal["char"]["string"] = "string";
+	tipofinal["string"]["char"] = "erro";
+	tipofinal["char"]["string"] = "erro";
 	tipofinal["bool"]["int"] = "erro";
 	tipofinal["int"]["bool"] = "erro";
 	tipofinal["float"]["char"] = "erro";
@@ -969,12 +966,12 @@ Simbolo buscar(string name)
 void declarar(string tipo, string label, int tam_string) 
 {
 	if (tipo == "bool") tipo = "int";
-	if (tipo == "string") tipo = "char";
+	if (tipo == "string") tipo = "char*";
 	
 	if(g_processando_escopo_global){
 		if(tam_string != -1) // Quando o campo de tamanho for -1, quer dizer que não estamos declarando uma string
 		{
-			declaracoes_globais.push_back(tipo + " " + label + "[" + to_string(tam_string) + "]" + ";\n");
+			declaracoes_globais.push_back(tipo + " " + label + ";\n");
 		}
 		else
 		{
@@ -984,7 +981,7 @@ void declarar(string tipo, string label, int tam_string)
 	else {
 		if(tam_string != -1) // Quando o campo de tamanho for -1, quer dizer que não estamos declarando uma string
 		{
-			declaracoes_locais.push_back("\t" + tipo + " " + label + "[" + to_string(tam_string) + "]" + ";\n");
+			declaracoes_locais.push_back("\t" + tipo + " " + label +  + ";\n");
 		}
 		else
 		{
@@ -1127,6 +1124,7 @@ string retirar_aspas(string traducao, int tamanho){
 
 	return traducaoTemp;
 }
+
 void desempilhar_contexto_case() {
 	if (!g_switch_context_stack.empty()) {
         g_switch_context_stack.pop_back();

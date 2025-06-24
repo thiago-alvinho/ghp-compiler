@@ -1,13 +1,18 @@
-def main {
-    var i;
-    var b;
-    b = 10;
-    var c;
-    c = "thiago";
+var d;
+d = 15;
 
-    for(i = 1; i <= 10; i = i + 1){
-        var a;
-        a = 20;
-        output(i + "\n");
-    }  
+def main {
+    var a;
+    var b;
+
+    a = 2;
+
+    do {
+        var c;
+        output("Digite o numero que deseja somar a variavel a: ");
+        c = input(%d);
+        a = a + c;
+    } while (a < 5);
+
+    a = a + d;
 }

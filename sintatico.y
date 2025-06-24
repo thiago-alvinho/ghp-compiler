@@ -50,7 +50,12 @@ struct SwitchContext {
     std::string end_label;
 };
 
-vector<string> declaracoes;
+/*vetores de declarações das variáveis locais e globais*/
+vector<string> declaracoes_locais;
+vector<string> declaracoes_globais;
+/*variável para saber se estamos no escopo global ainda ou não*/
+bool g_processando_escopo_global = true;
+
 vector<unordered_map<string, Simbolo>> tabela;
 vector<string> break_label_stack;
 vector<string> continue_label_stack;
@@ -101,20 +106,25 @@ string string_intermediario(string buffer, string tamanho, string cond, string l
 
 %%
 
-S 			:LISTA_COMANDOS_GLOBAIS TK_DEF TK_MAIN BLOCO
+S 			:LISTA_COMANDOS_GLOBAIS S_MAIN
 			{
 				string codigo = "/*Compilador GHP*/\n"
 								"#include<string.h>\n"
-								"#include<stdio.h>\n\n"
-								"int main(void) {\n";
+								"#include<stdio.h>\n\n";
 
-				for (int i = 0; i < declaracoes.size(); i++) {
-					codigo += declaracoes[i];
+				for (int i = 0; i < declaracoes_globais.size(); i++) {
+					codigo += declaracoes_globais[i];
+				}
+
+				codigo += "\nint main(void) {\n";
+
+				for (int i = 0; i < declaracoes_locais.size(); i++) {
+					codigo += declaracoes_locais[i];
 				}	
 
 				codigo += "\n" + $1.traducao;
 
-				codigo += "\n" + $4.traducao;
+				codigo += "\n" + $2.traducao;
 								
 				codigo += 	"\n\treturn 0;"
 							"\n}";
@@ -122,6 +132,15 @@ S 			:LISTA_COMANDOS_GLOBAIS TK_DEF TK_MAIN BLOCO
 				cout << codigo << endl;
 			}
 			;
+S_MAIN : TK_DEF TK_MAIN
+		{
+			g_processando_escopo_global = false;
+		}
+		BLOCO
+		{
+			$$ = $4;
+		}
+		;
 LISTA_COMANDOS_GLOBAIS : 
 						{
 							$$.traducao = "";
@@ -952,13 +971,25 @@ void declarar(string tipo, string label, int tam_string)
 	if (tipo == "bool") tipo = "int";
 	if (tipo == "string") tipo = "char";
 	
-	if(tam_string != -1) // Quando o campo de tamanho for -1, quer dizer que não estamos declarando uma string
-	{
-		declaracoes.push_back("\t" + tipo + " " + label + "[" + to_string(tam_string) + "]" + ";\n");
+	if(g_processando_escopo_global){
+		if(tam_string != -1) // Quando o campo de tamanho for -1, quer dizer que não estamos declarando uma string
+		{
+			declaracoes_globais.push_back(tipo + " " + label + "[" + to_string(tam_string) + "]" + ";\n");
+		}
+		else
+		{
+			declaracoes_globais.push_back(tipo + " " + label + ";\n");
+		}
 	}
-	else
-	{
-	declaracoes.push_back("\t" + tipo + " " + label + ";\n");
+	else {
+		if(tam_string != -1) // Quando o campo de tamanho for -1, quer dizer que não estamos declarando uma string
+		{
+			declaracoes_locais.push_back("\t" + tipo + " " + label + "[" + to_string(tam_string) + "]" + ";\n");
+		}
+		else
+		{
+			declaracoes_locais.push_back("\t" + tipo + " " + label + ";\n");
+		}
 	}
 }
 

@@ -45,7 +45,7 @@ TIPO_INPUT ("%d"|"%f"|"%s"|"%c")
     
 "var"           {return TK_VAR;}
     
-[(){}[\]:;,]    { return *yytext; }
+[(){}\[\]:;,]    { return *yytext; }
     
 [+\-*/]		    { return *yytext; }
     

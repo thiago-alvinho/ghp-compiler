@@ -21,6 +21,9 @@ struct Simbolo
 	string tamanho = "";
 	string vetor_string = "";
 	bool tipado = false;
+	string rows_label = "";
+	string cols_label = "";
+	bool is_matrix = false;
 };
 
 struct atributos
@@ -77,7 +80,7 @@ bool verificar(string name);
 Simbolo buscar(string name);
 void declarar(string tipo, string label, int tam_string);
 string cast_implicito(atributos* no1, atributos* no2, atributos* no3, string tipo);
-void atualizar(string tipo, string nome, string tamanho, string cadeia_char, string atualiza_label);
+void atualizar(string tipo, string nome, string tamanho, string cadeia_char, string atualiza_label, string rows, string cols, bool matrix);
 int tamanho_string(string traducao);
 string retirar_aspas(string traducao, int tamanho);
 void adicionarSimbolo(string nome);
@@ -447,7 +450,7 @@ COMANDO 	: E ';'
 				
 
 					declarar("char*", temp_ponteiro, -1);
-					atualizar("string", $1.label, tamanho, "", temp_ponteiro);
+					atualizar("string", $1.label, tamanho, "", temp_ponteiro, "", "", false);
 
 					$$.traducao += "\t" + buffer + " = malloc(256);\n" +
 					"\tfgets(" + buffer + ", 256, stdin);\n" +
@@ -468,7 +471,7 @@ COMANDO 	: E ';'
 					declarar($5.tipo, var, -1);
 					$$.traducao += "\tscanf(\"" + $5.label + "\", &" + var + ");\n";
 
-					atualizar($5.tipo, $1.label, "", "", var);
+					atualizar($5.tipo, $1.label, "", "", var, "", "", false);
 					$$.label = var;
 				}
 
@@ -516,7 +519,7 @@ COMANDO 	: E ';'
 				$$.traducao += "\tfree(" + simbolo1.label + ");\n"; // Libera a memória antiga de 'a' (t1)
 				$$.traducao += "\t" + simbolo1.label + " = " + resultado_temp_c_label + ";\n"; // 'a' (t1) agora aponta para o novo buffer
 
-				atualizar($$.tipo, $3.label, $$.tamanho, cat, simbolo1.label); 
+				atualizar($$.tipo, $3.label, $$.tamanho, cat, simbolo1.label, "", "", false); 
 			}
 			;
 
@@ -577,67 +580,57 @@ DEFAULT_CLAUSE : TK_DEFAULT ':' COMANDOS
                }
                ;
 
-OUTPUT		: OUTPUT '+' TK_ID
-			{
-				if(!verificar($3.label)) yyerror("Erro Semantico: Variavel '" + $3.label + "' nao declarada para output.");
-
-				Simbolo variavel = buscar($3.label);
-				if(variavel.tipado == false) yyerror("Erro Semantico: Variavel '" + $3.label + "' nao foi tipada.");
-
+OUTPUT      : E
+            {
+                // Este é o caso base: imprimir uma única expressão.
+                // A expressão $1 já foi processada e seu valor está em $1.label.
+                
                 string format_specifier;
-                if (variavel.tipo == "int" || variavel.tipo == "bool") {
+                string valor_a_imprimir = $1.label;
+
+                if ($1.tipo == "int" || $1.tipo == "bool") {
                     format_specifier = "%d";
-                } else if (variavel.tipo == "float") {
+                } else if ($1.tipo == "float") {
                     format_specifier = "%f";
-                } else if (variavel.tipo == "char") {
+                } else if ($1.tipo == "char") {
                     format_specifier = "%c";
-                } else if (variavel.tipo == "string") {
+                } else if ($1.tipo == "string") {
                     format_specifier = "%s";
                 } else {
-                    yyerror("Erro Semantico: Tipo de variavel '" + variavel.tipo + "' nao suportado para output.");
+                    yyerror("Erro Semantico: Tentando imprimir uma expressao de tipo invalido ou desconhecido: " + $1.tipo);
                 }
 
-                $$.traducao = $1.traducao + "\tprintf(\"" + format_specifier + "\", " + variavel.label + ");\n";
-                $$.label = ""; // Resetar label/tipo se não for relevante para o pai
-                $$.tipo = "";
-			}
-			| OUTPUT '+' TK_CADEIA_CHAR
-			{
-				$$.traducao = $1.traducao + "\tprintf(" + $3.label + ");\n";
+                // O código final é o código para calcular a expressão, seguido do printf.
+                $$.traducao = $1.traducao + "\tprintf(\"" + format_specifier + "\", " + valor_a_imprimir + ");\n";
                 $$.label = "";
                 $$.tipo = "";
-			}
-			| TK_ID
-			{
-				if(!verificar($1.label)) yyerror("Erro Semantico: Variavel '" + $1.label + "' nao declarada para output.");
-	
-				Simbolo variavel = buscar($1.label);
-				if(variavel.tipado == false) yyerror("Erro Semantico: Variavel '" + $1.label + "' nao foi tipada.");
-
+            }
+            | OUTPUT ',' E
+            {
+                // Caso recursivo: já imprimimos algo ($1) e estamos concatenando outra expressão ($3).
+                $$.traducao = $1.traducao; // Pega o código gerado anteriormente.
+                
                 string format_specifier;
-                if (variavel.tipo == "int" || variavel.tipo == "bool") {
+                string valor_a_imprimir = $3.label;
+
+                if ($3.tipo == "int" || $3.tipo == "bool") {
                     format_specifier = "%d";
-                } else if (variavel.tipo == "float") {
+                } else if ($3.tipo == "float") {
                     format_specifier = "%f";
-                } else if (variavel.tipo == "char") {
+                } else if ($3.tipo == "char") {
                     format_specifier = "%c";
-                } else if (variavel.tipo == "string") {
+                } else if ($3.tipo == "string") {
                     format_specifier = "%s";
                 } else {
-                    yyerror("Erro Semantico: Tipo de variavel '" + variavel.tipo + "' nao suportado para output.");
+                    yyerror("Erro Semantico: Tentando imprimir uma expressao de tipo invalido ou desconhecido: " + $3.tipo);
                 }
 
-                $$.traducao = "\tprintf(\"" + format_specifier + "\", " + variavel.label + ");\n";
+                // Adiciona o código para calcular a nova expressão e seu respectivo printf.
+                $$.traducao += $3.traducao + "\tprintf(\"" + format_specifier + "\", " + valor_a_imprimir + ");\n";
                 $$.label = "";
                 $$.tipo = "";
-			}
-			| TK_CADEIA_CHAR
-			{
-				$$.traducao = "\tprintf(" + $1.label + ");\n";
-                $$.label = "";
-                $$.tipo = "";
-			}
-			;
+            }
+            ;
 ATRI 		:TK_ID '=' E
 			{
 				traducaoTemp = "";
@@ -651,14 +644,14 @@ ATRI 		:TK_ID '=' E
 
 				if(variavel.tipado == false) {
 					if($3.tipo == "string" ){
-						atualizar($3.tipo, $1.label, $3.tamanho, $3.vetor_string, "");
+						atualizar($3.tipo, $1.label, $3.tamanho, $3.vetor_string, "", "", "", false);
 						declarar($3.tipo, variavel.label, stoi($3.tamanho));
 						variavel.tipo = $3.tipo;
 						variavel.tamanho = $3.tamanho;
 						$1.tamanho = $3.tamanho;
 						$1.vetor_string = $3.vetor_string;
 					}else{
-						atualizar($3.tipo, $1.label, "", "", "");
+						atualizar($3.tipo, $1.label, "", "", "", "", "", false);
 						declarar($3.tipo, variavel.label, -1);
 						variavel.tipo = $3.tipo;
 					}
@@ -679,6 +672,70 @@ ATRI 		:TK_ID '=' E
 				$$.traducao = $1.traducao + $3.traducao + traducaoTemp + "\t" + $1.label + " = " + $3.label + ";\n";
 				}
 			}
+			| TK_ID '[' E ']' '[' E ']' '=' E
+			{
+			if (!verificar($1.label)) {
+          	yyerror("Erro Semantico: Matriz '" + $1.label + "' nao declarada.");
+      		}
+
+      		Simbolo s = buscar($1.label);
+      		if (!s.is_matrix) {
+          		yyerror("Erro Semantico: Variavel '" + $1.label + "' nao eh uma matriz.");
+      		}
+
+      		// Copiamos os atributos do valor da direita ($9) para poder modificá-los com o cast.
+      		atributos rhs_attrs = $9;
+      
+      		// Concatenar a tradução de todas as expressões (índices e valor)
+      		$$.traducao = $3.traducao + $6.traducao + rhs_attrs.traducao;
+
+      		if (s.tipado == false) {
+          		// --- SEÇÃO DE INFERÊNCIA E ALOCAÇÃO (JÁ ESTÁ CORRETA) ---
+          		string tipo_inferido = rhs_attrs.tipo;
+
+
+          		string tipo_c_ptr = tipo_inferido + "*";
+				if(tipo_inferido == "bool") tipo_c_ptr = "int*";
+          		declarar(tipo_c_ptr, s.label, -1);
+          
+          		string temp_total_size = gentempcode();
+          		declarar("int", temp_total_size, -1);
+              
+          		$$.traducao += "\t" + temp_total_size + " = " + s.rows_label + " * " + s.cols_label + ";\n";
+				if(tipo_inferido == "bool") {
+					$$.traducao += "\t" + s.label + " = ("+tipo_c_ptr+") malloc(sizeof(" + "int" + ") * " + temp_total_size + ");\n";	
+				} else {
+					$$.traducao += "\t" + s.label + " = ("+tipo_c_ptr+") malloc(sizeof(" + tipo_inferido + ") * " + temp_total_size + ");\n";	
+				}
+              
+          		// Atualiza a tabela com o tipo inferido e outras informações
+          		atualizar(tipo_inferido, $1.label, "", "", "", s.rows_label, s.cols_label, true); 
+          		s.tipo = tipo_inferido; // Atualiza a cópia local para o passo seguinte
+      		} else {
+          		// --- AJUSTE: VERIFICAÇÃO DE TIPO E CAST IMPLÍCITO ---
+          		if (tipofinal[s.tipo][rhs_attrs.tipo] == "erro") {
+               		yyerror("Erro de tipo: A matriz '" + $1.label + "' eh do tipo " + s.tipo + " e nao pode receber uma atribuicao do tipo " + rhs_attrs.tipo);
+          		}
+          
+          		// Cria um atributo temporário para representar o tipo de destino (o tipo da matriz)
+          		atributos lhs_attrs;
+          		lhs_attrs.tipo = s.tipo;
+          		lhs_attrs.label = s.label; // Não é estritamente necessário para o cast, mas é bom ter
+
+          		// Chama o cast_implicito para ajustar o valor da direita (rhs_attrs) se necessário
+          		// A função cast_implicito já adiciona a tradução do cast em 'traducaoTemp'.
+          		traducaoTemp = "";
+          		traducaoTemp = cast_implicito(&$$, &lhs_attrs, &rhs_attrs, "atribuicao");
+          		$$.traducao += traducaoTemp;
+      		}
+
+      		// --- LÓGICA DE CÁLCULO DE ÍNDICE E ATRIBUIÇÃO (Usa o rhs_attrs possivelmente modificado pelo cast) ---
+      		string temp_index = gentempcode();
+      		declarar("int", temp_index, -1);
+
+      		$$.traducao += "\t" + temp_index + " = " + $3.label + " * " + s.cols_label + " + " + $6.label + ";\n";
+      		$$.traducao += "\t" + s.label + "[" + temp_index + "] = " + rhs_attrs.label + ";\n"; // Usa o label do rhs
+			}
 			;
 
 DEC			:TK_VAR TK_ID
@@ -695,7 +752,27 @@ DEC			:TK_VAR TK_ID
 				$$.tamanho = "";
 				$$.vetor_string = "";
 
-			};
+			}
+			| TK_VAR TK_ID '[' E ']' '[' E ']'
+			{
+			  if(verificar($2.label)) {
+                  yyerror("Variavel ja declarada: " + $2.label);
+              }
+              // Verifica se as expressões de dimensão são numéricas
+              if ($4.tipo != "int" || $7.tipo != "int") {
+                  yyerror("Erro Semantico: As dimensoes da matriz devem ser do tipo inteiro.");
+              }
+
+              // Adiciona o símbolo da matriz na tabela
+              adicionarSimbolo($2.label); 
+
+			  atualizar("", $2.label, "", "", "", $4.label, $7.label, true);
+
+			  $$.traducao = $4.traducao + $7.traducao;
+			  $$.label = "";
+			  $$.tipo = "";
+			}
+			;
 
 
 E 			: '(' E ')'
@@ -887,6 +964,34 @@ E 			: '(' E ')'
 
 				declarar($$.tipo, $$.label, tamString);
 			}
+			| TK_ID '[' E ']' '[' E ']'
+			{
+			// $1: nome da matriz, $3: expr linha, $6: expr coluna
+            if (!verificar($1.label)) {
+            	yyerror("Erro Semantico: Matriz '" + $1.label + "' nao declarada.");
+            }
+
+            Simbolo s = buscar($1.label);
+            if (!s.is_matrix) {
+            	yyerror("Erro Semantico: Variavel '" + $1.label + "' nao eh uma matriz.");
+            }
+            if (!s.tipado) {
+            	yyerror("Erro Semantico: Matriz '" + $1.label + "' usada antes de qualquer valor ser atribuido a ela.");
+            }
+
+            // Gerar código para calcular o índice linear
+            string temp_index = gentempcode();
+            declarar("int", temp_index, -1);
+
+            $$.traducao = $3.traducao + $6.traducao; // Código das expressões de índice
+            $$.traducao += "\t" + temp_index + " = " + $3.label + " * " + s.cols_label + " + " + $6.label + ";\n";
+              
+            // Gerar código para ler o valor e colocá-lo em uma nova temp
+            $$.label = gentempcode();
+            $$.tipo = s.tipo; // O tipo da expressão é o tipo base da matriz
+            declarar($$.tipo, $$.label, -1);
+            $$.traducao += "\t" + $$.label + " = " + s.label + "[" + temp_index + "];\n";
+			}
             ;
 %%
 
@@ -1035,16 +1140,22 @@ string cast_implicito(atributos* no1, atributos* no2, atributos* no3, string tip
 	return traducaoTemp;
 }
 
-void atualizar(string tipo, string nome, string tamanho, string cadeia_char, string atualiza_label) {
+void atualizar(string tipo, string nome, string tamanho, string cadeia_char, string atualiza_label, string rows, string cols, bool matrix) {
 
 	for(int i = tabela.size() - 1; i >= 0; i--) {
 		auto it = tabela[i].find(nome);
 		if(!(it == tabela[i].end())) {
 			if(atualiza_label != "") it->second.label = atualiza_label;
-			it->second.tipo = tipo;
-			it->second.tipado = true;
+			
+			if(tipo != "") {
+				it->second.tipo = tipo;
+				it->second.tipado = true;
+			}
 			it->second.tamanho = tamanho;
 			it->second.vetor_string = cadeia_char;
+			it->second.rows_label = rows;
+			it->second.cols_label = cols;
+			it->second.is_matrix = matrix;
 			break;
 		}
 	}

@@ -1,7 +1,11 @@
 def main {
-    var matriz[1][2];
-    matriz[0][0] = "ola";
-    matriz[0][1] = "mundo";
+    var matriz[2][2] = {"luiz,", "trouxe", "o", "cafe?"};
+    var i;
+    var j;
 
-    output(matriz[0][0], " ",  matriz[0][1]);
+    for(i = 0; i < 2; i++) {
+        for(j = 0; j < 2; j++) {
+            output(matriz[i][j], " ");
+        }
+    }
 }

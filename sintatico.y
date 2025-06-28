@@ -64,6 +64,8 @@ bool g_processando_escopo_global = true;
 // Nova variável global para coletar os valores da lista de inicialização
 static vector<vector<atributos>> g_current_matrix_initializer;
 
+static vector<atributos> g_current_flat_initializer;
+
 
 
 vector<unordered_map<string, Simbolo>> tabela;
@@ -849,6 +851,22 @@ ELEMENT_LIST : E
 			 }
 			 ;
 
+FLAT_INITIALIZER_SETUP : 
+						{
+							g_current_flat_initializer.clear();
+						}
+						;
+FLAT_INITIALIZER : '{' FLAT_INITIALIZER_SETUP FLAT_ELEMENT_LIST '}'
+				 ;
+FLAT_ELEMENT_LIST : E
+				  {
+					g_current_flat_initializer.push_back($1);
+				  }
+				  | FLAT_ELEMENT_LIST ',' E
+				  {
+					g_current_flat_initializer.push_back($3);
+				  }
+				  ;
 DEC			:TK_VAR TK_ID
 			{
 				if(verificar($2.label)) {
@@ -958,6 +976,81 @@ DEC			:TK_VAR TK_ID
 						string valor_label = g_current_matrix_initializer[i][j].label;
 						$$.traducao += "\t" + temp_index + " = " + to_string(i) + " * " + $7.literal_value + " + " + to_string(j) + ";\n";
 						$$.traducao += "\t" + s.label + "[" + temp_index + "] = " + valor_label + ";\n";
+					}
+				}
+			}
+			| TK_VAR TK_ID '[' E ']' '[' E ']' '=' FLAT_INITIALIZER
+			{
+				// $2: nome, $4: linhas, $7: colunas, $10: FLAT_INITIALIZER
+
+				// --- 1. Verificações Iniciais ---
+				if(verificar($2.label)) { yyerror("Variavel ja declarada: " + $2.label); }
+				if ($4.tipo != "int" || $7.tipo != "int") { yyerror("As dimensoes da matriz devem ser do tipo inteiro."); }
+				if (g_current_flat_initializer.empty()) { yyerror("Lista de inicializacao da matriz nao pode ser vazia."); }
+
+				// --- 2. Verificações de Dimensão e Tipo ---
+				int declared_rows = stoi($4.literal_value);
+				int declared_cols = stoi($7.literal_value);
+				
+				if (g_current_flat_initializer.size() != (declared_rows * declared_cols)) {
+					yyerror("Erro Semantico: Numero de elementos no inicializador (" + to_string(g_current_flat_initializer.size()) + ") eh diferente do tamanho da matriz (" + to_string(declared_rows * declared_cols) + ").");
+				}
+				
+				string inferred_type = g_current_flat_initializer[0].tipo;
+				string all_expressions_code;
+
+				for (size_t i = 0; i < g_current_flat_initializer.size(); ++i) {
+					atributos& current_elem = g_current_flat_initializer[i];
+					all_expressions_code += current_elem.traducao;
+					
+					if (inferred_type != current_elem.tipo) {
+						// Lógica de cast implícito para int/float
+						bool cast_valido = (inferred_type == "float" && current_elem.tipo == "int") || (inferred_type == "int" && current_elem.tipo == "float");
+						if (cast_valido) {
+							string casted_temp_label = gentempcode();
+							declarar(inferred_type, casted_temp_label, -1);
+							all_expressions_code += "\t" + casted_temp_label + " = (" + inferred_type + ")" + current_elem.label + ";\n";
+							current_elem.label = casted_temp_label;
+						} else {
+							yyerror("Erro Semantico: Tipos incompativeis na inicializacao. Esperado " + inferred_type + ", mas encontrado " + current_elem.tipo + ".");
+						}
+					}
+				}
+
+				// --- 3. Geração de Código ---
+				adicionarSimbolo($2.label);
+				Simbolo s = buscar($2.label);
+				atualizar(inferred_type, $2.label, "", "", "", $4.literal_value, $7.literal_value, true);
+				
+				string tipo_c = inferred_type;
+				if (tipo_c == "bool") tipo_c = "int";
+
+				// Geração de código de alocação (nível único para numéricos, nível duplo para strings)
+				$$.traducao = $4.traducao + $7.traducao;
+				string temp_total_size = gentempcode();
+				declarar("int", temp_total_size, -1);
+				$$.traducao += "\t" + temp_total_size + " = " + $4.literal_value + " * " + $7.literal_value + ";\n";
+				
+				if (inferred_type == "string") {
+					declarar("char**", s.label, -1);
+					$$.traducao += "\t" + s.label + " = (char**) malloc(sizeof(char*) * " + temp_total_size + ");\n";
+				} else {
+					declarar(tipo_c + "*", s.label, -1);
+					$$.traducao += "\t" + s.label + " = (" + tipo_c + "*) malloc(sizeof(" + tipo_c + ") * " + temp_total_size + ");\n";
+				}
+				
+				$$.traducao += all_expressions_code;
+
+				// Geração de código para atribuição sequencial
+				for (size_t i = 0; i < g_current_flat_initializer.size(); ++i) {
+					const atributos& current_elem = g_current_flat_initializer[i];
+					if (inferred_type == "string") {
+						// Para strings, alocar e copiar cada uma
+						$$.traducao += "\t" + s.label + "[" + to_string(i) + "] = (char*) malloc(sizeof(char) * " + current_elem.tamanho + ");\n";
+						$$.traducao += "\tstrcpy(" + s.label + "[" + to_string(i) + "], " + current_elem.label + ");\n";
+					} else {
+						// Para números, atribuição direta
+						$$.traducao += "\t" + s.label + "[" + to_string(i) + "] = " + current_elem.label + ";\n";
 					}
 				}
 			}

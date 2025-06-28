@@ -1,18 +1,9 @@
 def main {
-    var matriz_int[2][2];
-    var matriz_float[2][2];
-    var matriz_char[2][2];
+    var a;
+    var b;
+    a = 2;
 
-    matriz_int[0][0] = 100;
-    matriz_int[0][1] = 200;
-    matriz_int[1][1] = 999;
+    b = a++;
 
-    matriz_float[0][0] = 1.23;
-    matriz_float[1][0] = 4.56;
-
-    matriz_char[0][0] = 'A';
-    matriz_char[1][1] = 'Z';
     
-    output(matriz_int[1][1]);
-    output(matriz_float[0][0]);
 }

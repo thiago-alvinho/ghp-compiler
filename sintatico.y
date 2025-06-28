@@ -93,8 +93,8 @@ string string_intermediario(string buffer, string tamanho, string cond, string l
 
 %}
 
-%token TK_NUM TK_FLOAT TK_CHAR TK_BOOL TK_RELACIONAL TK_ORLOGIC TK_ANDLOGIC TK_NOLOGIC TK_CAST TK_VAR TK_CADEIA_CHAR TK_TIPO_INPUT
-%token TK_MAIN TK_DEF TK_ID TK_IF TK_THEN TK_ELSE TK_WHILE TK_DO TK_FOR TK_BREAK TK_CONTINUE TK_CPY TK_CAT TK_INPUT TK_OUTPUT
+%token TK_NUM TK_FLOAT TK_CHAR TK_BOOL TK_RELACIONAL TK_ORLOGIC TK_ANDLOGIC TK_NOLOGIC TK_CAST TK_VAR TK_CADEIA_CHAR TK_TIPO_INPUT TK_PLUS_EQ TK_MINUS_EQ TK_MULT_EQ TK_DIV_EQ
+%token TK_MAIN TK_DEF TK_ID TK_IF TK_THEN TK_ELSE TK_WHILE TK_DO TK_FOR TK_BREAK TK_CONTINUE TK_CPY TK_CAT TK_INPUT TK_OUTPUT TK_INC TK_DEC
 %token TK_SWITCH TK_CASE TK_DEFAULT
 // TK_FIM TK_ERROR
 %start S
@@ -104,7 +104,7 @@ string string_intermediario(string buffer, string tamanho, string cond, string l
 %left TK_RELACIONAL
 %left '+' '-'
 %left '*' '/'
-%right TK_NOLOGIC
+%right TK_NOLOGIC TK_INC TK_DEC
 %left '(' ')' TK_CAST
 
 %%
@@ -631,6 +631,11 @@ OUTPUT      : E
                 $$.tipo = "";
             }
             ;
+OP_ATRIBUICAO : TK_PLUS_EQ { $$.label = "+";}
+			  | TK_MINUS_EQ { $$.label = "-";}
+			  | TK_MULT_EQ { $$.label = "*";}
+			  | TK_DIV_EQ { $$.label = "/";}
+			  ;
 ATRI 		:TK_ID '=' E
 			{
 				traducaoTemp = "";
@@ -674,68 +679,117 @@ ATRI 		:TK_ID '=' E
 			}
 			| TK_ID '[' E ']' '[' E ']' '=' E
 			{
-			if (!verificar($1.label)) {
-          	yyerror("Erro Semantico: Matriz '" + $1.label + "' nao declarada.");
-      		}
+				if (!verificar($1.label)) {
+          			yyerror("Erro Semantico: Matriz '" + $1.label + "' nao declarada.");
+      			}
 
-      		Simbolo s = buscar($1.label);
-      		if (!s.is_matrix) {
-          		yyerror("Erro Semantico: Variavel '" + $1.label + "' nao eh uma matriz.");
-      		}
+      			Simbolo s = buscar($1.label);
+      			if (!s.is_matrix) {
+          			yyerror("Erro Semantico: Variavel '" + $1.label + "' nao eh uma matriz.");
+      			}
 
-      		// Copiamos os atributos do valor da direita ($9) para poder modificá-los com o cast.
-      		atributos rhs_attrs = $9;
+      			// Copiamos os atributos do valor da direita ($9) para poder modificá-los com o cast.
+      			atributos rhs_attrs = $9;
       
-      		// Concatenar a tradução de todas as expressões (índices e valor)
-      		$$.traducao = $3.traducao + $6.traducao + rhs_attrs.traducao;
+      			// Concatenar a tradução de todas as expressões (índices e valor)
+      			$$.traducao = $3.traducao + $6.traducao + rhs_attrs.traducao;
 
-      		if (s.tipado == false) {
-          		// --- SEÇÃO DE INFERÊNCIA E ALOCAÇÃO (JÁ ESTÁ CORRETA) ---
-          		string tipo_inferido = rhs_attrs.tipo;
+      			if (s.tipado == false) {
+          			// --- SEÇÃO DE INFERÊNCIA E ALOCAÇÃO (JÁ ESTÁ CORRETA) ---
+          			string tipo_inferido = rhs_attrs.tipo;
 
 
-          		string tipo_c_ptr = tipo_inferido + "*";
-				if(tipo_inferido == "bool") tipo_c_ptr = "int*";
-          		declarar(tipo_c_ptr, s.label, -1);
+          			string tipo_c_ptr = tipo_inferido + "*";
+					if(tipo_inferido == "bool") tipo_c_ptr = "int*";
+          			declarar(tipo_c_ptr, s.label, -1);
           
-          		string temp_total_size = gentempcode();
-          		declarar("int", temp_total_size, -1);
+          			string temp_total_size = gentempcode();
+          			declarar("int", temp_total_size, -1);
               
-          		$$.traducao += "\t" + temp_total_size + " = " + s.rows_label + " * " + s.cols_label + ";\n";
-				if(tipo_inferido == "bool") {
-					$$.traducao += "\t" + s.label + " = ("+tipo_c_ptr+") malloc(sizeof(" + "int" + ") * " + temp_total_size + ");\n";	
-				} else {
-					$$.traducao += "\t" + s.label + " = ("+tipo_c_ptr+") malloc(sizeof(" + tipo_inferido + ") * " + temp_total_size + ");\n";	
-				}
+          			$$.traducao += "\t" + temp_total_size + " = " + s.rows_label + " * " + s.cols_label + ";\n";
+					if(tipo_inferido == "bool") {
+						$$.traducao += "\t" + s.label + " = ("+tipo_c_ptr+") malloc(sizeof(" + "int" + ") * " + temp_total_size + ");\n";	
+					} else {
+						$$.traducao += "\t" + s.label + " = ("+tipo_c_ptr+") malloc(sizeof(" + tipo_inferido + ") * " + temp_total_size + ");\n";	
+					}
               
-          		// Atualiza a tabela com o tipo inferido e outras informações
-          		atualizar(tipo_inferido, $1.label, "", "", "", s.rows_label, s.cols_label, true); 
-          		s.tipo = tipo_inferido; // Atualiza a cópia local para o passo seguinte
-      		} else {
-          		// --- AJUSTE: VERIFICAÇÃO DE TIPO E CAST IMPLÍCITO ---
-          		if (tipofinal[s.tipo][rhs_attrs.tipo] == "erro") {
-               		yyerror("Erro de tipo: A matriz '" + $1.label + "' eh do tipo " + s.tipo + " e nao pode receber uma atribuicao do tipo " + rhs_attrs.tipo);
-          		}
+          			// Atualiza a tabela com o tipo inferido e outras informações
+          			atualizar(tipo_inferido, $1.label, "", "", "", s.rows_label, s.cols_label, true); 
+          			s.tipo = tipo_inferido; // Atualiza a cópia local para o passo seguinte
+      			} else {
+          			// --- AJUSTE: VERIFICAÇÃO DE TIPO E CAST IMPLÍCITO ---
+          			if (tipofinal[s.tipo][rhs_attrs.tipo] == "erro") {
+               			yyerror("Erro de tipo: A matriz '" + $1.label + "' eh do tipo " + s.tipo + " e nao pode receber uma atribuicao do tipo " + rhs_attrs.tipo);
+          			}
           
-          		// Cria um atributo temporário para representar o tipo de destino (o tipo da matriz)
-          		atributos lhs_attrs;
-          		lhs_attrs.tipo = s.tipo;
-          		lhs_attrs.label = s.label; // Não é estritamente necessário para o cast, mas é bom ter
+          			// Cria um atributo temporário para representar o tipo de destino (o tipo da matriz)
+          			atributos lhs_attrs;
+          			lhs_attrs.tipo = s.tipo;
+          			lhs_attrs.label = s.label; // Não é estritamente necessário para o cast, mas é bom ter
 
-          		// Chama o cast_implicito para ajustar o valor da direita (rhs_attrs) se necessário
-          		// A função cast_implicito já adiciona a tradução do cast em 'traducaoTemp'.
-          		traducaoTemp = "";
-          		traducaoTemp = cast_implicito(&$$, &lhs_attrs, &rhs_attrs, "atribuicao");
-          		$$.traducao += traducaoTemp;
-      		}
+          			// Chama o cast_implicito para ajustar o valor da direita (rhs_attrs) se necessário
+          			// A função cast_implicito já adiciona a tradução do cast em 'traducaoTemp'.
+          			traducaoTemp = "";
+          			traducaoTemp = cast_implicito(&$$, &lhs_attrs, &rhs_attrs, "atribuicao");
+          			$$.traducao += traducaoTemp;
+      			}
 
-      		// --- LÓGICA DE CÁLCULO DE ÍNDICE E ATRIBUIÇÃO (Usa o rhs_attrs possivelmente modificado pelo cast) ---
-      		string temp_index = gentempcode();
-      		declarar("int", temp_index, -1);
+      			// --- LÓGICA DE CÁLCULO DE ÍNDICE E ATRIBUIÇÃO (Usa o rhs_attrs possivelmente modificado pelo cast) ---
+      			string temp_index = gentempcode();
+      			declarar("int", temp_index, -1);
 
-      		$$.traducao += "\t" + temp_index + " = " + $3.label + " * " + s.cols_label + " + " + $6.label + ";\n";
-      		$$.traducao += "\t" + s.label + "[" + temp_index + "] = " + rhs_attrs.label + ";\n"; // Usa o label do rhs
+      			$$.traducao += "\t" + temp_index + " = " + $3.label + " * " + s.cols_label + " + " + $6.label + ";\n";
+      			$$.traducao += "\t" + s.label + "[" + temp_index + "] = " + rhs_attrs.label + ";\n"; // Usa o label do rhs
 			}
+			| TK_ID OP_ATRIBUICAO E
+			{
+				// 1. Buscar a variável do lado esquerdo (LHS)
+           		Simbolo lhs_var = buscar($1.label);
+           		if (!lhs_var.tipado) {
+               		yyerror("Erro Semantico: Variavel '" + $1.label + "' usada em operacao composta antes de ser tipada.");
+           		}
+
+           		// 2. Tratar concatenação de strings com +=
+           		if (lhs_var.tipo == "string" && $2.label == "+") {
+               		if ($3.tipo != "string") {
+                   		yyerror("Erro Semantico: Operador '+=' em uma string requer outra string como operando.");
+               		}
+               
+               		string novo_tamanho_label = gentempcode();
+               		declarar("int", novo_tamanho_label, -1);
+               
+               		// Código para calcular o novo tamanho necessário e realocar a memória do LHS
+               		$$.traducao = $3.traducao; // Código da expressão do lado direito
+               		$$.traducao += "\t" + novo_tamanho_label + " = strlen(" + lhs_var.label + ") + strlen(" + $3.label + ") + 1;\n";
+               		$$.traducao += "\t" + lhs_var.label + " = (char*) realloc(" + lhs_var.label + ", " + novo_tamanho_label + ");\n";
+               		$$.traducao += "\tstrcat(" + lhs_var.label + ", " + $3.label + ");\n";
+
+               		// Atualizar o tamanho na tabela de símbolos (opcional, mas bom para consistência)
+               		atualizar(lhs_var.tipo, $1.label, novo_tamanho_label, "", lhs_var.label, "", "", false);
+
+           		} else { // 3. Tratar operações aritméticas
+               
+               		// Verificação de tipo para a operação
+               		if (tipofinal[lhs_var.tipo][$3.tipo] == "erro" || tipofinal[lhs_var.tipo][$3.tipo] == "string") {
+                   		yyerror("Operador '" + $2.label + "=' com tipos incompativeis: " + lhs_var.tipo + " e " + $3.tipo);
+               		}
+
+               		// Gerar o código de três endereços que espelha a = a + b
+               		$$.traducao = $3.traducao; // Primeiro, o código da expressão do lado direito
+               
+               		// Gera a operação e armazena em um temporário.
+               		// Isso lida corretamente com as regras de promoção de tipo (ex: int + float -> float)
+               		string op_result_temp = gentempcode();
+               		string op_result_tipo = tipofinal[lhs_var.tipo][$3.tipo];
+               		declarar(op_result_tipo, op_result_temp, -1);
+               		$$.traducao += "\t" + op_result_temp + " = " + lhs_var.label + " " + $2.label + " " + $3.label + ";\n";
+
+               		// Atribui o resultado de volta à variável original.
+               		// O C lidará com o casting de atribuição (ex: float sendo truncado para int).
+               		$$.traducao += "\t" + lhs_var.label + " = " + op_result_temp + ";\n";
+           		}
+			}
+			| OPERADORES_UNARIOS;
 			;
 
 DEC			:TK_VAR TK_ID
@@ -992,7 +1046,81 @@ E 			: '(' E ')'
             declarar($$.tipo, $$.label, -1);
             $$.traducao += "\t" + $$.label + " = " + s.label + "[" + temp_index + "];\n";
 			}
+			| OPERADORES_UNARIOS;
             ;
+OPERADORES_UNARIOS : TK_ID TK_INC
+					{
+						// Pós-incremento: a++
+        				Simbolo variavel = buscar($1.label);
+        				// Validação de tipo: só pode incrementar tipos numéricos
+        				if (variavel.tipo != "int" && variavel.tipo != "float" && variavel.tipo != "char") {
+            				yyerror("Erro Semantico: Operador '++' so pode ser aplicado em tipos numericos (int, float, char).");
+        				}
+        				if (!variavel.tipado) {
+            				yyerror("Erro Semantico: Variavel '" + $1.label + "' usada em operacao antes de ser tipada.");
+        				}
+
+        				// 1. Cria um temporário para guardar o valor ORIGINAL de 'a'
+        				$$.label = gentempcode();
+        				$$.tipo = variavel.tipo; // O tipo da expressão é o tipo original da variável
+        				declarar($$.tipo, $$.label, -1);
+        
+        				// 2. A tradução consiste em copiar o valor original, depois incrementar a variável
+        				$$.traducao = "\t" + $$.label + " = " + variavel.label + ";\n"; // temp = a;
+        				$$.traducao += "\t" + variavel.label + " = " + variavel.label + " + 1;\n"; // a = a + 1;
+					}
+					| TK_ID TK_DEC
+					{
+						// Pós-decremento: a--
+        				Simbolo variavel = buscar($1.label);
+        				if (variavel.tipo != "int" && variavel.tipo != "float" && variavel.tipo != "char") {
+            				yyerror("Erro Semantico: Operador '--' so pode ser aplicado em tipos numericos (int, float, char).");
+        				}
+        				if (!variavel.tipado) {
+            				yyerror("Erro Semantico: Variavel '" + $1.label + "' usada em operacao antes de ser tipada.");
+        				}
+
+        				$$.label = gentempcode();
+        				$$.tipo = variavel.tipo;
+        				declarar($$.tipo, $$.label, -1);
+        
+        				$$.traducao = "\t" + $$.label + " = " + variavel.label + ";\n"; // temp = a;
+        				$$.traducao += "\t" + variavel.label + " = " + variavel.label + " - 1;\n"; // a = a - 1;
+					}
+					| TK_INC TK_ID
+					{
+						// Pré-incremento: ++a
+        				Simbolo variavel = buscar($2.label);
+        				if (variavel.tipo != "int" && variavel.tipo != "float" && variavel.tipo != "char") {
+            				yyerror("Erro Semantico: Operador '++' so pode ser aplicado em tipos numericos (int, float, char).");
+        				}
+        				if (!variavel.tipado) {
+            				yyerror("Erro Semantico: Variavel '" + $2.label + "' usada em operacao antes de ser tipada.");
+        				}
+        
+        				// 1. A tradução é simplesmente a operação de incremento
+        				$$.traducao = "\t" + variavel.label + " = " + variavel.label + " + 1;\n";
+        
+        				// 2. O resultado da expressão é a própria variável com seu novo valor
+        				$$.label = variavel.label;
+        				$$.tipo = variavel.tipo;
+					}
+					| TK_DEC TK_ID
+					{
+						// Pré-decremento: --a
+        				Simbolo variavel = buscar($2.label);
+        				if (variavel.tipo != "int" && variavel.tipo != "float" && variavel.tipo != "char") {
+            				yyerror("Erro Semantico: Operador '--' so pode ser aplicado em tipos numericos (int, float, char).");
+        				}
+        				if (!variavel.tipado) {
+            				yyerror("Erro Semantico: Variavel '" + $2.label + "' usada em operacao antes de ser tipada.");
+        				}
+
+        				$$.traducao = "\t" + variavel.label + " = " + variavel.label + " - 1;\n";
+        
+        				$$.label = variavel.label;
+        				$$.tipo = variavel.tipo;
+					}
 %%
 
 #include "lex.yy.c"

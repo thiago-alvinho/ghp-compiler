@@ -44,6 +44,13 @@ TIPO_INPUT ("%d"|"%f"|"%s"|"%c")
 "main"		    {return TK_MAIN;}
     
 "var"           {return TK_VAR;}
+
+"+="            {return TK_PLUS_EQ;}
+"-="            {return TK_MINUS_EQ;}
+"*="            {return TK_MULT_EQ;}
+"/="            {return TK_DIV_EQ;}
+"++"            {return TK_INC;}
+"--"            {return TK_DEC;}
     
 [(){}\[\]:;,]    { return *yytext; }
     

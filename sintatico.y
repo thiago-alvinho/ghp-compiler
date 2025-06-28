@@ -66,8 +66,6 @@ static vector<vector<atributos>> g_current_matrix_initializer;
 
 static vector<atributos> g_current_flat_initializer;
 
-
-
 vector<unordered_map<string, Simbolo>> tabela;
 vector<string> break_label_stack;
 vector<string> continue_label_stack;
@@ -338,7 +336,7 @@ COMANDO 	: E ';'
                 $$.tipo = ""; 
                 $$.label = "";
 			}
-			| TK_FOR '(' ATRI ';' E ';' ATRI ')' CRIAR_ROTULOS_FOR BLOCO RETIRAR_ROTULOS
+			| TK_FOR '(' INTERMEDIARIO_FOR ';' E ';' ATRI ')' CRIAR_ROTULOS_FOR BLOCO RETIRAR_ROTULOS
 			{
                 if($5.tipo != "bool") {
                     yyerror("Erro Semantico: A expressao de condicao no loop 'for' deve ser do tipo booleano.");
@@ -531,6 +529,60 @@ COMANDO 	: E ';'
 				atualizar($$.tipo, $3.label, $$.tamanho, cat, simbolo1.label, "", "", false); 
 			}
 			;
+
+INTERMEDIARIO_FOR: TK_ID '=' E
+			{
+				traducaoTemp = "";
+
+				if(!verificar($1.label)) {
+					yyerror("Variavel nao foi declarada.");
+				}
+
+				Simbolo variavel;
+				variavel = buscar($1.label);
+
+				if(variavel.tipado == false && $3.tipo == "int") {
+					atualizar($3.tipo, $1.label, "", "", "", "", "", false);
+					declarar($3.tipo, variavel.label, -1);
+					variavel.tipo = $3.tipo;
+				} else if(variavel.tipado == true){
+					yyerror("Nao é possivel atribuir um valor a essa variavel no parametro do for, ela já tem um valor atribuido!");
+				}
+
+				$$.traducao += $1.traducao + $3.traducao + "\t" + variavel.label + " = " + $3.label + ";\n";
+			}
+			| TK_VAR TK_ID '=' E
+			{
+				if($4.tipo != "int"){
+					yyerror("Nao é possivel atribuir um valor que não seja um inteiro a uma variavel utilizada como parametro no for!");
+				}
+				if(verificar($2.label)) {
+              		yyerror("Variavel ja declarada: " + $2.label);
+          		}
+
+				adicionarSimbolo($2.label);
+
+				$$.label = "";
+				$$.traducao = "";
+				$$.tipo = "";
+				$$.tamanho = "";
+				$$.vetor_string = "";
+
+				Simbolo variavel;
+				variavel = buscar($2.label);
+
+				if(variavel.tipado == false) {
+					atualizar($4.tipo, $2.label, "", "", "", "", "", false);
+					declarar($4.tipo, variavel.label, -1);
+					variavel.tipo = $4.tipo;
+				}
+
+				$2.tipo = variavel.tipo;
+				$2.label = variavel.label;
+
+				$$.traducao += $2.traducao + $4.traducao + "\t" + $2.label + " = " + $4.label + ";\n";
+				
+			};
 
 CASE_STATEMENTS_LIST :
                      {
@@ -900,6 +952,57 @@ DEC			:TK_VAR TK_ID
 			  $$.traducao = $4.traducao + $7.traducao;
 			  $$.label = "";
 			  $$.tipo = "";
+			}
+			| TK_VAR TK_ID '=' E
+			{
+				if(verificar($2.label)) {
+              		yyerror("Variavel ja declarada: " + $2.label);
+          		}
+
+				adicionarSimbolo($2.label);
+
+				$$.label = "";
+				$$.traducao = "";
+				$$.tipo = "";
+				$$.tamanho = "";
+				$$.vetor_string = "";
+
+				Simbolo variavel;
+				variavel = buscar($2.label);
+
+				if(variavel.tipado == false) {
+					if($4.tipo == "string" ){
+						atualizar($4.tipo, $2.label, $4.tamanho, $4.vetor_string, "", "", "", false);
+						declarar($4.tipo, variavel.label, stoi($4.tamanho));
+						variavel.tipo = $4.tipo;
+						variavel.tamanho = $4.tamanho;
+						$2.tamanho = $4.tamanho;
+						$2.vetor_string = $4.vetor_string;
+					}else{
+						atualizar($4.tipo, $2.label, "", "", "", "", "", false);
+						declarar($4.tipo, variavel.label, -1);
+						variavel.tipo = $4.tipo;
+					}
+				}
+
+				$2.tipo = variavel.tipo;
+				$2.label = variavel.label;
+
+				if(tipofinal[$2.tipo][$4.tipo] == "erro") yyerror("Operação com tipos inválidos");
+
+				traducaoTemp = "";
+				traducaoTemp = cast_implicito(&$$, &$2, &$4, "atribuicao");
+				if($2.tipo == "string" && $4.tipo == "string" && $4.id){
+					$$.traducao += $2.traducao + $4.traducao + traducaoTemp + 
+					"\t" + $2.label + " = (char *) realloc(" + $2.label + ", " + $4.tamanho + ");\n" +
+					"\tstrcpy(" + $2.label + ", " + $4.label + ");\n";
+				}else if($2.tipo == "string" && $4.tipo == "string"){
+					$$.traducao += $2.traducao + $4.traducao + traducaoTemp + 
+					"\t" + $2.label + " = (char *) malloc(" + $4.tamanho + " * sizeof(char));\n" +
+					"\tstrcpy(" + $2.label + ", " + $4.label + ");\n";
+				}else{
+					$$.traducao += $2.traducao + $4.traducao + traducaoTemp + "\t" + $2.label + " = " + $4.label + ";\n";
+				}
 			}
 			| TK_VAR TK_ID '[' E ']' '[' E ']' '=' INITIALIZER
 			{

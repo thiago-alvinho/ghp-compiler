@@ -33,6 +33,8 @@ struct atributos
 	string tipo;
 	string tamanho = "";
 	string vetor_string = "";
+	string literal_value = "";
+	bool id = false;
 };
 
 struct CaseInfo {
@@ -58,6 +60,11 @@ vector<string> declaracoes_locais;
 vector<string> declaracoes_globais;
 /*variável para saber se estamos no escopo global ainda ou não*/
 bool g_processando_escopo_global = true;
+
+// Nova variável global para coletar os valores da lista de inicialização
+static vector<vector<atributos>> g_current_matrix_initializer;
+
+
 
 vector<unordered_map<string, Simbolo>> tabela;
 vector<string> break_label_stack;
@@ -668,13 +675,16 @@ ATRI 		:TK_ID '=' E
 				if(tipofinal[$1.tipo][$3.tipo] == "erro") yyerror("Operação com tipos inválidos");
 
 				traducaoTemp = cast_implicito(&$$, &$1, &$3, "atribuicao");
-
-				if($1.tipo == "string"){
-					$$.traducao = $1.traducao + $3.traducao + traducaoTemp + 
+				if($1.tipo == "string" && $3.tipo == "string" && $3.id){
+					$$.traducao += $1.traducao + $3.traducao + traducaoTemp + 
+					"\t" + $1.label + " = (char *) realloc(" + $1.label + ", " + $3.tamanho + ");\n" +
+					"\tstrcpy(" + $1.label + ", " + $3.label + ");\n";
+				}else if($1.tipo == "string" && $3.tipo == "string"){
+					$$.traducao += $1.traducao + $3.traducao + traducaoTemp + 
 					"\t" + $1.label + " = (char *) malloc(" + $3.tamanho + " * sizeof(char));\n" +
 					"\tstrcpy(" + $1.label + ", " + $3.label + ");\n";
 				}else{
-				$$.traducao = $1.traducao + $3.traducao + traducaoTemp + "\t" + $1.label + " = " + $3.label + ";\n";
+					$$.traducao += $1.traducao + $3.traducao + traducaoTemp + "\t" + $1.label + " = " + $3.label + ";\n";
 				}
 			}
 			| TK_ID '[' E ']' '[' E ']' '=' E
@@ -789,8 +799,34 @@ ATRI 		:TK_ID '=' E
                		$$.traducao += "\t" + lhs_var.label + " = " + op_result_temp + ";\n";
            		}
 			}
-			| OPERADORES_UNARIOS;
+			| OPERADORES_UNARIOS
 			;
+INITIALIZER_SETUP : 
+				  {
+					g_current_matrix_initializer.clear();
+				  }
+				  ;
+INITIALIZER : '{' INITIALIZER_SETUP ROW_LIST '}'
+			;
+
+ROW_LIST : ROW
+		 | ROW_LIST ',' ROW
+		 ;
+ROW : '{' 
+	{
+		g_current_matrix_initializer.push_back({});
+	}
+	ELEMENT_LIST '}'
+	;
+ELEMENT_LIST : E
+			 {
+				g_current_matrix_initializer.back().push_back($1);
+			 }
+			 | ELEMENT_LIST ',' E
+			 {
+				g_current_matrix_initializer.back().push_back($3);
+			 }
+			 ;
 
 DEC			:TK_VAR TK_ID
 			{
@@ -825,6 +861,84 @@ DEC			:TK_VAR TK_ID
 			  $$.traducao = $4.traducao + $7.traducao;
 			  $$.label = "";
 			  $$.tipo = "";
+			}
+			| TK_VAR TK_ID '[' E ']' '[' E ']' '=' INITIALIZER
+			{
+				// $2: TK_ID (nome), $4: E (linhas), $7: E (colunas), $10: INITIALIZER
+
+          		// --- 1. Verificações Iniciais ---
+          		if(verificar($2.label)) {
+              		yyerror("Variavel ja declarada: " + $2.label);
+          		}
+          		if ($4.tipo != "int" || $7.tipo != "int") {
+              		yyerror("Erro Semantico: As dimensoes da matriz devem ser do tipo inteiro constante.");
+          		}
+          		if (g_current_matrix_initializer.empty() || g_current_matrix_initializer[0].empty()) {
+              		yyerror("Erro Semantico: Lista de inicializacao da matriz '" + $2.label + "' nao pode ser vazia.");
+          		}
+
+          		// --- 2. Verificações de Dimensão, Tipo e CASTING ---
+          		int declared_rows = stoi($4.literal_value);
+          		int declared_cols = stoi($7.literal_value);
+          
+          		if (g_current_matrix_initializer.size() != declared_rows) {
+              		yyerror("Erro Semantico: Numero de linhas no inicializador (" + to_string(g_current_matrix_initializer.size()) + ") eh diferente do declarado (" + to_string(declared_rows) + ").");
+          		}
+          
+				string inferred_type = g_current_matrix_initializer[0][0].tipo;
+				string all_expressions_code;
+
+				for (size_t i = 0; i < g_current_matrix_initializer.size(); ++i) {
+					if (g_current_matrix_initializer[i].size() != declared_cols) {
+						yyerror("Erro Semantico: Numero de colunas na linha " + to_string(i) + " do inicializador eh diferente do declarado (" + to_string(declared_cols) + ").");
+					}
+					for (size_t j = 0; j < g_current_matrix_initializer[i].size(); ++j) {
+						atributos& current_elem = g_current_matrix_initializer[i][j];
+						all_expressions_code += current_elem.traducao;
+						
+						if (inferred_type != current_elem.tipo) {
+							bool cast_valido = (inferred_type == "float" && current_elem.tipo == "int") || (inferred_type == "int" && current_elem.tipo == "float");
+							if (cast_valido) {
+								string casted_temp_label = gentempcode();
+								string c_type_for_decl = inferred_type;
+								if(c_type_for_decl == "bool") c_type_for_decl = "int";
+								
+								declarar(inferred_type, casted_temp_label, -1);
+								all_expressions_code += "\t" + casted_temp_label + " = (" + c_type_for_decl + ")" + current_elem.label + ";\n";
+								current_elem.label = casted_temp_label; // ATUALIZA o label para o valor castado
+							} else {
+								yyerror("Erro Semantico: Tipos incompativeis na inicializacao. Esperado " + inferred_type + ", mas encontrado " + current_elem.tipo + ".");
+							}
+						}
+					}
+				}
+
+				// --- 3. Geração de Código ---
+				adicionarSimbolo($2.label);
+				Simbolo s = buscar($2.label);
+				atualizar(inferred_type, $2.label, "", "", "", $4.literal_value, $7.literal_value, true);
+				
+				string tipo_c = inferred_type;
+				if (tipo_c == "bool") tipo_c = "int";
+				
+				declarar(tipo_c + "*", s.label, -1);
+
+				string temp_total_size = gentempcode();
+				declarar("int", temp_total_size, -1);
+				$$.traducao = $4.traducao + $7.traducao;
+				$$.traducao += "\t" + temp_total_size + " = " + $4.literal_value + " * " + $7.literal_value + ";\n";
+				$$.traducao += "\t" + s.label + " = (" + tipo_c + "*) malloc(sizeof(" + tipo_c + ") * " + temp_total_size + ");\n";
+				$$.traducao += all_expressions_code;
+
+				for (int i = 0; i < declared_rows; ++i) {
+					for (int j = 0; j < declared_cols; ++j) {
+						string temp_index = gentempcode();
+						declarar("int", temp_index, -1);
+						string valor_label = g_current_matrix_initializer[i][j].label;
+						$$.traducao += "\t" + temp_index + " = " + to_string(i) + " * " + $7.literal_value + " + " + to_string(j) + ";\n";
+						$$.traducao += "\t" + s.label + "[" + temp_index + "] = " + valor_label + ";\n";
+					}
+				}
 			}
 			;
 
@@ -903,6 +1017,7 @@ E 			: '(' E ')'
 				$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
 				$$.tipo = "float";
 				declarar($$.tipo, $$.label, -1);
+				$$.literal_value = $1.label;
 			}
 			| TK_NUM
 			{
@@ -910,23 +1025,25 @@ E 			: '(' E ')'
 				$$.traducao = "\t" + $$.label + " = " + $1.label + ";\n";
 				$$.tipo = "int";
 				declarar($$.tipo, $$.label, -1);
+				$$.literal_value = $1.label;
 			}
 			| TK_ID
 			{
 				Simbolo variavel;
 
-				if(!verificar($1.label)) {
-					yyerror("Variavel nao foi declarada.");
-				}
-				
-				variavel = buscar($1.label);
-				if(variavel.tipo == "") yyerror("Variavel ainda nao possui tipo");
-				
-				$$.label = variavel.label;
-				$$.traducao = "";
-				$$.tipo = variavel.tipo;
-				$$.tamanho = variavel.tamanho;
-				$$.vetor_string = variavel.vetor_string;				
+                if(!verificar($1.label)) {
+                    yyerror("Variavel nao foi declarada.");
+                }
+
+                variavel = buscar($1.label);
+                if(variavel.tipo == "") yyerror("Variavel ainda nao possui tipo");
+
+                $$.label = variavel.label;
+                $$.traducao = "";
+                $$.tipo = variavel.tipo;
+                $$.tamanho = variavel.tamanho;
+                $$.vetor_string = variavel.vetor_string;
+                $$.id = true;				
 			}
 			| TK_CHAR
 			{
@@ -936,6 +1053,7 @@ E 			: '(' E ')'
 				$$.tipo = "char";
 				$$.tamanho = "1";
 				declarar($$.tipo, $$.label, -1);
+				$$.literal_value = $1.label;
 			}
 			| TK_BOOL
 			{
@@ -1046,7 +1164,7 @@ E 			: '(' E ')'
             declarar($$.tipo, $$.label, -1);
             $$.traducao += "\t" + $$.label + " = " + s.label + "[" + temp_index + "];\n";
 			}
-			| OPERADORES_UNARIOS;
+			| OPERADORES_UNARIOS
             ;
 OPERADORES_UNARIOS : TK_ID TK_INC
 					{
@@ -1121,6 +1239,7 @@ OPERADORES_UNARIOS : TK_ID TK_INC
         				$$.label = variavel.label;
         				$$.tipo = variavel.tipo;
 					}
+					;
 %%
 
 #include "lex.yy.c"

@@ -1,9 +1,3 @@
 def main {
-    var a;
-    var b;
-    a = 2;
-
-    b = a++;
-
-    
+    var matriz[2][2] = {{2.5, 2.5}, {3, 4}};
 }

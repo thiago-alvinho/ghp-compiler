@@ -689,67 +689,88 @@ ATRI 		:TK_ID '=' E
 			}
 			| TK_ID '[' E ']' '[' E ']' '=' E
 			{
+				// --- Atribuição a um elemento de matriz: matriz[i][j] = valor ---
+				// $1: nome, $3: linha, $6: coluna, $9: valor
+
 				if (!verificar($1.label)) {
-          			yyerror("Erro Semantico: Matriz '" + $1.label + "' nao declarada.");
-      			}
+					yyerror("Erro Semantico: Matriz '" + $1.label + "' nao declarada.");
+				}
 
-      			Simbolo s = buscar($1.label);
-      			if (!s.is_matrix) {
-          			yyerror("Erro Semantico: Variavel '" + $1.label + "' nao eh uma matriz.");
-      			}
+				Simbolo s = buscar($1.label);
+				if (!s.is_matrix) {
+					yyerror("Erro Semantico: Variavel '" + $1.label + "' nao eh uma matriz.");
+				}
 
-      			// Copiamos os atributos do valor da direita ($9) para poder modificá-los com o cast.
-      			atributos rhs_attrs = $9;
-      
-      			// Concatenar a tradução de todas as expressões (índices e valor)
-      			$$.traducao = $3.traducao + $6.traducao + rhs_attrs.traducao;
+				// O valor que está sendo atribuído (lado direito)
+				atributos rhs_attrs = $9;
 
-      			if (s.tipado == false) {
-          			// --- SEÇÃO DE INFERÊNCIA E ALOCAÇÃO (JÁ ESTÁ CORRETA) ---
-          			string tipo_inferido = rhs_attrs.tipo;
+				// Código para avaliar os índices e o valor
+				$$.traducao = $3.traducao + $6.traducao + rhs_attrs.traducao;
 
+				// --- LÓGICA DE INFERÊNCIA DE TIPO E ALOCAÇÃO ---
+				if (s.tipado == false) {
+					// Esta é a primeira atribuição, vamos inferir o tipo e alocar a matriz.
+					string inferred_type = rhs_attrs.tipo;
+					
+					if (inferred_type == "string") {
+						// --- CASO ESPECIAL: PRIMEIRA ATRIBUIÇÃO A UMA MATRIZ DE STRINGS ---
+						
+						// a. Declara a matriz como um ponteiro para ponteiros de char (char**)
+						declarar("char**", s.label, -1);
 
-          			string tipo_c_ptr = tipo_inferido + "*";
-					if(tipo_inferido == "bool") tipo_c_ptr = "int*";
-          			declarar(tipo_c_ptr, s.label, -1);
-          
-          			string temp_total_size = gentempcode();
-          			declarar("int", temp_total_size, -1);
-              
-          			$$.traducao += "\t" + temp_total_size + " = " + s.rows_label + " * " + s.cols_label + ";\n";
-					if(tipo_inferido == "bool") {
-						$$.traducao += "\t" + s.label + " = ("+tipo_c_ptr+") malloc(sizeof(" + "int" + ") * " + temp_total_size + ");\n";	
+						// b. Aloca o array de ponteiros (o array de "linhas")
+						string temp_total_size = gentempcode();
+						declarar("int", temp_total_size, -1);
+						$$.traducao += "\t" + temp_total_size + " = " + s.rows_label + " * " + s.cols_label + ";\n";
+						$$.traducao += "\t" + s.label + " = (char**) malloc(sizeof(char*) * " + temp_total_size + ");\n";
+						
 					} else {
-						$$.traducao += "\t" + s.label + " = ("+tipo_c_ptr+") malloc(sizeof(" + tipo_inferido + ") * " + temp_total_size + ");\n";	
+						// --- CASO PADRÃO: PRIMEIRA ATRIBUIÇÃO A UMA MATRIZ NUMÉRICA ---
+						string tipo_c_ptr = inferred_type;
+						if (tipo_c_ptr == "bool") tipo_c_ptr = "int";
+						declarar(tipo_c_ptr + "*", s.label, -1);
+						
+						string temp_total_size = gentempcode();
+						declarar("int", temp_total_size, -1);
+						$$.traducao += "\t" + temp_total_size + " = " + s.rows_label + " * " + s.cols_label + ";\n";
+						$$.traducao += "\t" + s.label + " = (" + tipo_c_ptr + "*) malloc(sizeof(" + tipo_c_ptr + ") * " + temp_total_size + ");\n";
 					}
-              
-          			// Atualiza a tabela com o tipo inferido e outras informações
-          			atualizar(tipo_inferido, $1.label, "", "", "", s.rows_label, s.cols_label, true); 
-          			s.tipo = tipo_inferido; // Atualiza a cópia local para o passo seguinte
-      			} else {
-          			// --- AJUSTE: VERIFICAÇÃO DE TIPO E CAST IMPLÍCITO ---
-          			if (tipofinal[s.tipo][rhs_attrs.tipo] == "erro") {
-               			yyerror("Erro de tipo: A matriz '" + $1.label + "' eh do tipo " + s.tipo + " e nao pode receber uma atribuicao do tipo " + rhs_attrs.tipo);
-          			}
-          
-          			// Cria um atributo temporário para representar o tipo de destino (o tipo da matriz)
-          			atributos lhs_attrs;
-          			lhs_attrs.tipo = s.tipo;
-          			lhs_attrs.label = s.label; // Não é estritamente necessário para o cast, mas é bom ter
+					
+					// Atualiza a tabela de símbolos com o tipo inferido
+					atualizar(inferred_type, $1.label, "", "", "", s.rows_label, s.cols_label, true);
+					s.tipo = inferred_type; // Atualiza a cópia local para o resto desta ação
+				
+				} else {
+					// A matriz já tem um tipo, apenas verificamos a compatibilidade
+					if (tipofinal[s.tipo][rhs_attrs.tipo] == "erro") {
+						yyerror("Erro de tipo: A matriz '" + $1.label + "' eh do tipo " + s.tipo + " e nao pode receber uma atribuicao do tipo " + rhs_attrs.tipo);
+					}
+					// Lógica de cast implícito (int -> float, float -> int)
+					if (s.tipo != rhs_attrs.tipo) {
+						atributos lhs_attrs;
+						lhs_attrs.tipo = s.tipo;
+						$$.traducao += cast_implicito(&$$, &lhs_attrs, &rhs_attrs, "atribuicao");
+					}
+				}
 
-          			// Chama o cast_implicito para ajustar o valor da direita (rhs_attrs) se necessário
-          			// A função cast_implicito já adiciona a tradução do cast em 'traducaoTemp'.
-          			traducaoTemp = "";
-          			traducaoTemp = cast_implicito(&$$, &lhs_attrs, &rhs_attrs, "atribuicao");
-          			$$.traducao += traducaoTemp;
-      			}
+				// --- LÓGICA DE CÁLCULO DE ÍNDICE E ATRIBUIÇÃO FINAL ---
+				string temp_mult = gentempcode();
+				declarar("int", temp_mult, -1);
+				$$.traducao += "\t" + temp_mult + " = " + $3.label + " * " + s.cols_label + ";\n"; // t_mult = linha * num_cols
 
-      			// --- LÓGICA DE CÁLCULO DE ÍNDICE E ATRIBUIÇÃO (Usa o rhs_attrs possivelmente modificado pelo cast) ---
-      			string temp_index = gentempcode();
-      			declarar("int", temp_index, -1);
-
-      			$$.traducao += "\t" + temp_index + " = " + $3.label + " * " + s.cols_label + " + " + $6.label + ";\n";
-      			$$.traducao += "\t" + s.label + "[" + temp_index + "] = " + rhs_attrs.label + ";\n"; // Usa o label do rhs
+				string temp_index = gentempcode();
+				declarar("int", temp_index, -1);
+				$$.traducao += "\t" + temp_index + " = " + temp_mult + " + " + $6.label + ";\n";   // t_index = t_mult + coluna
+				
+				if (s.tipo == "string") {
+					// --- Atribuição para matriz de string: aloca o buffer para a string e copia ---
+					// rhs_attrs.tamanho vem da regra E:TK_CADEIA_CHAR
+					$$.traducao += "\t" + s.label + "[" + temp_index + "] = (char*) malloc(sizeof(char) * " + rhs_attrs.tamanho + ");\n";
+					$$.traducao += "\tstrcpy(" + s.label + "[" + temp_index + "], " + rhs_attrs.label + ");\n";
+				} else {
+					// --- Atribuição para matriz numérica ---
+					$$.traducao += "\t" + s.label + "[" + temp_index + "] = " + rhs_attrs.label + ";\n";
+				}
 			}
 			| TK_ID OP_ATRIBUICAO E
 			{
@@ -1151,12 +1172,16 @@ E 			: '(' E ')'
             	yyerror("Erro Semantico: Matriz '" + $1.label + "' usada antes de qualquer valor ser atribuido a ela.");
             }
 
-            // Gerar código para calcular o índice linear
-            string temp_index = gentempcode();
-            declarar("int", temp_index, -1);
+            $$.traducao = $3.traducao + $6.traducao;
 
-            $$.traducao = $3.traducao + $6.traducao; // Código das expressões de índice
-            $$.traducao += "\t" + temp_index + " = " + $3.label + " * " + s.cols_label + " + " + $6.label + ";\n";
+			// Gerar código para calcular o índice linear
+            string temp_mult = gentempcode();
+			declarar("int", temp_mult, -1);
+			$$.traducao += "\t" + temp_mult + " = " + $3.label + " * " + s.cols_label + ";\n"; // t_mult = linha * num_cols
+
+			string temp_index = gentempcode();
+			declarar("int", temp_index, -1);
+			$$.traducao += "\t" + temp_index + " = " + temp_mult + " + " + $6.label + ";\n";   // t_index = t_mult + coluna
               
             // Gerar código para ler o valor e colocá-lo em uma nova temp
             $$.label = gentempcode();
@@ -1333,7 +1358,7 @@ void declarar(string tipo, string label, int tam_string)
 	else {
 		if(tam_string != -1) // Quando o campo de tamanho for -1, quer dizer que não estamos declarando uma string
 		{
-			declaracoes_locais.push_back("\t" + tipo + " " + label +  + ";\n");
+			declaracoes_locais.push_back("\t" + tipo + " " + label + ";\n");
 		}
 		else
 		{

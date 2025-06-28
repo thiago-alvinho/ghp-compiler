@@ -1,3 +1,7 @@
 def main {
-    var matriz[2][2] = {{2.5, 2.5}, {3, 4}};
+    var matriz[1][2];
+    matriz[0][0] = "ola";
+    matriz[0][1] = "mundo";
+
+    output(matriz[0][0], " ",  matriz[0][1]);
 }

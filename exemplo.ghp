@@ -1,11 +1,6 @@
 def main {
-    var matriz[2][2] = {"luiz,", "trouxe", "o", "cafe?"};
-    var i;
-    var j;
-
-    for(i = 0; i < 2; i++) {
-        for(j = 0; j < 2; j++) {
-            output(matriz[i][j], " ");
-        }
-    }
+    var a = "Thiago";
+    var b = "Luiz";
+    strcat(a, b);
+    output(a);
 }

@@ -97,6 +97,8 @@ string genlabel();
 void retirar_rotulos();
 void desempilhar_contexto_case();
 string string_intermediario(string buffer, string tamanho, string cond, string label);
+bool verifica_string(string str, int tamanho);
+string temporarias_string(string str, string label, int tamanho, bool formatacao);
 
 %}
 
@@ -486,6 +488,13 @@ COMANDO 	: E ';'
             }
 			| TK_CAT '(' TK_ID ',' TK_ID ')' ';'
 			{
+                if (!verificar($3.label)) {
+                    yyerror("Erro Semantico: Variavel de destino '" + $3.label + "' nao declarada para concatenacao.");
+                }
+                if (!verificar($5.label)) {
+                    yyerror("Erro Semantico: Variavel de origem '" + $5.label + "' nao declarada para concatenacao.");
+                }
+
 				Simbolo simbolo1 = buscar($3.label); 
 				Simbolo simbolo2 = buscar($5.label); 
 
@@ -520,9 +529,6 @@ COMANDO 	: E ';'
 				$$.tipo = "string";
 				$$.tamanho = to_string(tamcat_total_alocado); 
 
-				// **CORREÇÃO AQUI:** Liberar a memória antiga do DESTINO e atribuir o NOVO ponteiro.
-				// O $3.label aqui refere-se ao nome da variável GHP ('a'), não ao seu label C (`t1`).
-				// O `simbolo1.label` é o label C atual da variável 'a' (que é 't1').
 				$$.traducao += "\tfree(" + simbolo1.label + ");\n"; // Libera a memória antiga de 'a' (t1)
 				$$.traducao += "\t" + simbolo1.label + " = " + resultado_temp_c_label + ";\n"; // 'a' (t1) agora aponta para o novo buffer
 
@@ -944,6 +950,10 @@ DEC			:TK_VAR TK_ID
                   yyerror("Erro Semantico: As dimensoes da matriz devem ser do tipo inteiro.");
               }
 
+			  if ($4.literal_value.empty() || $7.literal_value.empty()) {
+                  yyerror("Erro Semantico: As dimensoes da matriz devem ser valores inteiros constantes.");
+              }
+
               // Adiciona o símbolo da matriz na tabela
               adicionarSimbolo($2.label); 
 
@@ -1287,6 +1297,9 @@ E 			: '(' E ')'
             | E TK_RELACIONAL E
     		{	
 				traducaoTemp = "";
+				if (tipofinal[$1.tipo][$3.tipo] == "erro") {
+                    yyerror("Erro Semantico: Comparacao relacional entre tipos incompativeis: " + $1.tipo + " e " + $3.tipo);
+                }
 
 				traducaoTemp = cast_implicito(&$$, &$1, &$3, "operacao");
 
@@ -1297,6 +1310,9 @@ E 			: '(' E ')'
         	}
             | E TK_ORLOGIC E
     		{
+				 if (tipofinal[$1.tipo][$3.tipo] != "bool") {
+                    yyerror("Erro Semantico: Operador '||' exige operandos do tipo 'bool'.");
+                }
    				$$.label = gentempcode();
         		$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + " = " + $1.label + " " + $2.label + " " + $3.label + ";\n";
         		$$.tipo = "bool";
@@ -1304,6 +1320,9 @@ E 			: '(' E ')'
         	}
             | E TK_ANDLOGIC E
         	{
+				if (tipofinal[$1.tipo][$3.tipo] != "bool") {
+                    yyerror("Erro Semantico: Operador '&&' exige operandos do tipo 'bool'.");
+                }
         		$$.label = gentempcode();
         		$$.traducao = $1.traducao + $3.traducao + "\t" + $$.label + " = " + $1.label + " " + $2.label + " " + $3.label + ";\n";
         		$$.tipo = "bool";
@@ -1311,6 +1330,9 @@ E 			: '(' E ')'
             }
             | TK_NOLOGIC E
             {
+                if ($2.tipo != "bool") {
+                    yyerror("Erro Semantico: Operador '!' exige um operando do tipo 'bool'.");
+                }
 		    	$$.label = gentempcode();
         		$$.traducao = $2.traducao + "\t" + $$.label + " = !" + $2.label +  ";\n";
         		$$.tipo = "bool";
@@ -1332,24 +1354,21 @@ E 			: '(' E ')'
 			|TK_CADEIA_CHAR
 			{
 				int tamString = tamanho_string($1.label);
-				traducaoTemp = retirar_aspas($1.label, tamString);
 
+				string temp = $1.label;
+				
+				traducaoTemp = retirar_aspas($1.label, tamString);
+				bool verificacao = verifica_string($1.label, tamString);
 				$$.label = gentempcode();
 				$$.tipo = "string";
+				if(verificacao) tamString--;
+
 				$$.tamanho = to_string(tamString);
 				$$.vetor_string = traducaoTemp;
 
 				$$.traducao += "\t" + $$.label + " = (char *) malloc(" + $$.tamanho + " * sizeof(char));\n";
 
-				for(int i = 0; i < tamString; i++){
-					if(i != tamString - 1) 
-					{
-						$$.traducao += "\t" + $$.label + "[" + to_string(i) + "] = '" + traducaoTemp[i] + "';\n";
-					} else
-					{
-						$$.traducao += "\t" + $$.label + "[" + to_string(i) + "] = '\\0';\n";
-					}
-				}
+				$$.traducao += temporarias_string(traducaoTemp, $$.label, tamString, verificacao);
 
 				declarar($$.tipo, $$.label, tamString);
 			}
@@ -1358,6 +1377,10 @@ E 			: '(' E ')'
 			// $1: nome da matriz, $3: expr linha, $6: expr coluna
             if (!verificar($1.label)) {
             	yyerror("Erro Semantico: Matriz '" + $1.label + "' nao declarada.");
+            }
+
+			if ($3.tipo != "int" || $6.tipo != "int") {
+                yyerror("Erro Semantico: Os indices de acesso da matriz devem ser do tipo 'int'.");
             }
 
             Simbolo s = buscar($1.label);
@@ -1485,8 +1508,8 @@ int main(int argc, char* argv[])
 	tipofinal["float"]["float"] = "float";
 	tipofinal["string"]["string"] = "string";
 	tipofinal["int"]["float"] = "float";
-	tipofinal["char"]["int"] = "char";
-	tipofinal["int"]["char"] = "char";
+	tipofinal["char"]["int"] = "erro";
+	tipofinal["int"]["char"] = "erro";
 	tipofinal["char"]["char"] = "char";
 	tipofinal["bool"]["bool"] = "bool";
 	tipofinal["string"]["char"] = "erro";
@@ -1512,8 +1535,12 @@ int main(int argc, char* argv[])
 }
 
 void yyerror(string MSG)
-{
-	cout << MSG << endl;
+{	
+	if(MSG != "syntax error"){
+		cout << "Erro na linha "<< yylineno << ": " << MSG << endl;
+	}else{
+		cout << "Erro na linha "<< yylineno << ": Erro eh apresentado antes de" << yytext << endl;
+	}
 	exit (0);
 }
 
@@ -1687,6 +1714,7 @@ int tamanho_string(string traducao){
 
 	while(traducao[i] != '\0'){
 		if(traducao[i] != '"') tamanho++;
+		
 		i++;
 	}
 	tamanho++;
@@ -1728,4 +1756,54 @@ string string_intermediario(string buffer, string tamanho, string cond, string l
 	saida += "\t" + label + "_end:\n"; // Rótulo de fim do loop
 	saida += "\t\t" + tamanho + " = " + tamanho + " + 1;\n"; // Incrementa o tamanho mais uma vez (para incluir o nulo ou compensar o último incremento)
     return saida;
+}
+
+bool verifica_string(string str, int tamanho){
+	for(int i = 0; i < tamanho; i++){
+		if(str[i] == '\\' && str[i + 1] == 'n') return true;
+		if(str[i] == '\\' && str[i + 1] == 't') return true;
+	}
+	return false;
+}
+
+string temporarias_string(string str, string label, int tamanho, bool formatacao) {
+    string temp = "";
+
+    if (!formatacao) {
+        for (int i = 0; i < tamanho - 1; i++) {
+            char ch = str[i];
+            if (ch == '\'') temp += "\t" + label + "[" + to_string(i) + "] = '\\'';\n";
+            else if (ch == '\\') temp += "\t" + label + "[" + to_string(i) + "] = '\\\\';\n";
+            else temp += "\t" + label + "[" + to_string(i) + "] = '" + string(1, ch) + "';\n";
+        }
+        temp += "\t" + label + "[" + to_string(tamanho - 1) + "] = '\\0';\n";
+        return temp;
+    }
+    
+    int dest_index = 0; 
+
+    for (int i = 0; i < str.length(); ) {
+        
+        if (str[i] == '\\' && i + 1 < str.length()) {
+            char next_char = str[i + 1];
+            if (next_char == 'n' || next_char == 't') {
+                temp += "\t" + label + "[" + to_string(dest_index) + "] = '\\" + next_char + "';\n";
+                i += 2; 
+            } else {
+                temp += "\t" + label + "[" + to_string(dest_index) + "] = '\\\\';\n";
+                i += 1; 
+            }
+        } else {
+            char ch = str[i];
+            if (ch == '\'') temp += "\t" + label + "[" + to_string(dest_index) + "] = '\\'';\n";
+            else temp += "\t" + label + "[" + to_string(dest_index) + "] = '" + string(1, ch) + "';\n";
+            i += 1; 
+        }
+        
+        dest_index++; 
+    }
+
+    temp += "\t" + label + "[" + to_string(dest_index) + "] = '\\0';\n";
+
+    return temp;
 }

@@ -11,6 +11,7 @@ DELIM {ESPACO}+
 NUM {DIGITO}+
 REAL {NUM}+("."{NUM}+)?
 CHAR \'({LETRA}|{NUM})\'
+CADEIA_CHAR_NAO_TERMINADA \"[^\n\"]*
 CADEIA_CHAR \"[^\"]*\"
 ID {LETRA}({LETRA}|{NUM})*
 BOOL ("true"|"false")
@@ -22,7 +23,7 @@ CAST ("(float)"|"(int)"|"(bool)"|"(char)")
 TIPO_INPUT ("%d"|"%f"|"%s"|"%c")
 %%
     
-"\n"		  {}
+"\n"            { yylineno++; }
     
 {DELIM} 	{}
 "if"            {return TK_IF;}
@@ -85,6 +86,12 @@ TIPO_INPUT ("%d"|"%f"|"%s"|"%c")
 {REAL}          { yylval.label = yytext; return TK_FLOAT;}
 {CHAR}          { yylval.label = yytext; return TK_CHAR;}
 {CADEIA_CHAR}   { yylval.label = yytext; return TK_CADEIA_CHAR;}
-.			    { *yytext; }
+
+{CADEIA_CHAR_NAO_TERMINADA} { 
+    fprintf(stderr, "[Erro na linha %d] Erro Léxico: String não terminada.\n", yylineno);
+    exit(1);}
+
+.   { fprintf(stderr, "[Erro na linha %d] Erro Léxico: Caractere inesperado '%s'.\n", yylineno, yytext);
+    exit(1);}
     
 %%

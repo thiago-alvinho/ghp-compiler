@@ -20,6 +20,8 @@ ANDLOGIC ("&&")
 NOLOGIC ("!")
 CAST ("(float)"|"(int)"|"(bool)"|"(char)")
 TIPO_INPUT ("%d"|"%f"|"%s"|"%c")
+TIPOS ("int"|"float"|"void"|"char")
+
 %%
     
 "\n"		  {}
@@ -38,8 +40,8 @@ TIPO_INPUT ("%d"|"%f"|"%s"|"%c")
 "default"       {return TK_DEFAULT;}
 "input"         {return TK_INPUT;}
 "output"        {return TK_OUTPUT;}
-
 "def"           {return TK_DEF;}
+"return"        {return TK_RETURN;}
 
 "main"		    {return TK_MAIN;}
     
@@ -60,6 +62,7 @@ TIPO_INPUT ("%d"|"%f"|"%s"|"%c")
 
 "strcpy"        {yylval.label = yytext; return TK_CPY;}
 "strcat"        {yylval.label = yytext; return TK_CAT;}
+{TIPOS}         {yylval.label = yytext; return TK_TYPE_SPECIFIER;}
 
 {TIPO_INPUT}    { yylval.label = yytext; 
                 if(yylval.label == "%f") yylval.tipo = "float";

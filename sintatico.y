@@ -14,6 +14,12 @@ int var_temp_qnt;
 int label_qnt;
 string traducaoTemp;
 
+struct Parametro {
+    string tipo;
+    string nome_original;
+    string label_c;
+};
+
 struct Simbolo
 {
 	string label;
@@ -24,6 +30,12 @@ struct Simbolo
 	string rows_label = "";
 	string cols_label = "";
 	bool is_matrix = false;
+
+	bool is_function = false;
+    string tipo_retorno;
+    vector<Parametro> parametros;
+    bool prototipo_definido = false;
+    bool corpo_definido = false;
 };
 
 struct atributos
@@ -58,6 +70,7 @@ struct SwitchContext {
 /*vetores de declarações das variáveis locais e globais*/
 vector<string> declaracoes_locais;
 vector<string> declaracoes_globais;
+vector<string> declaracoes_main;
 /*variável para saber se estamos no escopo global ainda ou não*/
 bool g_processando_escopo_global = true;
 
@@ -77,6 +90,11 @@ static vector<CaseInfo> g_current_switch_cases;
 static DefaultInfo g_current_switch_default_info;
 static string g_current_switch_end_label;
 static vector<SwitchContext> g_switch_context_stack;
+
+vector<pair<string, string>> g_lista_parametros_atual;
+Simbolo* g_funcao_atual = nullptr;
+map<string, string> g_corpos_funcoes_traduzidos;
+
 
 map<string, map<string, string>> tipofinal;
 
@@ -102,7 +120,7 @@ string string_intermediario(string buffer, string tamanho, string cond, string l
 
 %token TK_NUM TK_FLOAT TK_CHAR TK_BOOL TK_RELACIONAL TK_ORLOGIC TK_ANDLOGIC TK_NOLOGIC TK_CAST TK_VAR TK_CADEIA_CHAR TK_TIPO_INPUT TK_PLUS_EQ TK_MINUS_EQ TK_MULT_EQ TK_DIV_EQ
 %token TK_MAIN TK_DEF TK_ID TK_IF TK_THEN TK_ELSE TK_WHILE TK_DO TK_FOR TK_BREAK TK_CONTINUE TK_CPY TK_CAT TK_INPUT TK_OUTPUT TK_INC TK_DEC
-%token TK_SWITCH TK_CASE TK_DEFAULT
+%token TK_SWITCH TK_CASE TK_DEFAULT TK_TYPE_SPECIFIER TK_RETURN
 // TK_FIM TK_ERROR
 %start S
 
@@ -116,33 +134,35 @@ string string_intermediario(string buffer, string tamanho, string cond, string l
 
 %%
 
-S 			:LISTA_COMANDOS_GLOBAIS S_MAIN
-			{
-				string codigo = "/*Compilador GHP*/\n"
-								"#include<string.h>\n"
-								"#include<stdlib.h>\n"
-								"#include<stdio.h>\n\n";
+S           : LISTA_COMANDOS_GLOBAIS S_MAIN LISTA_FUNCOES
+            {
+                string codigo = "/*Compilador GHP*/\n"
+                                "#include<string.h>\n"
+                                "#include<stdlib.h>\n"
+                                "#include<stdio.h>\n\n";
 
-				for (int i = 0; i < declaracoes_globais.size(); i++) {
-					codigo += declaracoes_globais[i];
-				}
+                // 1. Variáveis Globais e Protótipos de Funções em C
+                for (const auto& decl : declaracoes_globais) {
+                    codigo += decl;
+                }
+                codigo += "\n";
 
-				codigo += "\nint main(void) {\n";
+                // 2. Função Main
+                codigo += "int main(void) {\n";
+                for (const auto& decl : declaracoes_main) {
+                    codigo += decl;
+                }
+				
+                codigo += "\n" + $1.traducao; // Código de atribuições globais
+                codigo += "\n" + $2.traducao; // Código do corpo do main
+                codigo += "\n\treturn 0;\n}\n";
 
-				for (int i = 0; i < declaracoes_locais.size(); i++) {
-					codigo += declaracoes_locais[i];
-				}	
+                // 3. Corpos das Funções Traduzidos
+                codigo += $3.traducao;
 
-				codigo += "\n" + $1.traducao;
-
-				codigo += "\n" + $2.traducao;
-								
-				codigo += 	"\n\treturn 0;"
-							"\n}";
-
-				cout << codigo << endl;
-			}
-			;
+                cout << codigo << endl;
+            }
+            ;
 S_MAIN : TK_DEF TK_MAIN
 		{
 			g_processando_escopo_global = false;
@@ -150,6 +170,9 @@ S_MAIN : TK_DEF TK_MAIN
 		BLOCO
 		{
 			$$ = $4;
+			// Salva as declarações de main e limpa o vetor local para a próxima função
+			declaracoes_main = declaracoes_locais;
+			declaracoes_locais.clear();
 		}
 		;
 LISTA_COMANDOS_GLOBAIS : 
@@ -169,7 +192,176 @@ COMANDO_GLOBAL : DEC ';'
 				{
 
 				}
-				;
+				| PROTOTIPO_FUNC ';'
+
+PROTOTIPO_FUNC : TK_TYPE_SPECIFIER TK_DEF TK_ID '(' LISTA_PARAM_PROTOTIPO ')'
+               {
+                   string nome_func = $3.label;
+                   string tipo_retorno = $1.label;
+
+                   if (verificar(nome_func)) {
+                       yyerror("Erro Semantico: Redeclaracao de '" + nome_func + "'.");
+                   }
+
+                   adicionarSimbolo(nome_func);
+                   Simbolo& s = tabela.back().at(nome_func); // Pega a REFERÊNCIA
+                   s.is_function = true;
+                   s.prototipo_definido = true;
+                   s.tipo_retorno = tipo_retorno;
+
+                   string prototipo_c = $1.label;
+                   prototipo_c += " " + s.label + "(";
+
+                   // Agora, g_lista_parametros_atual tem os nomes das variáveis
+                   for(size_t i = 0; i < g_lista_parametros_atual.size(); i++) {
+                       Parametro p;
+                       p.tipo = g_lista_parametros_atual[i].first;
+                       p.nome_original = g_lista_parametros_atual[i].second; // <-- ARMAZENA O NOME
+                       s.parametros.push_back(p);
+                       
+                       string tipo_param_c = (p.tipo == "string") ? "char*" : (p.tipo == "bool" ? "int" : p.tipo);
+                       
+                       // Adiciona o tipo e o nome do parâmetro à assinatura C
+                       prototipo_c += tipo_param_c + " " + p.nome_original;
+                       
+                       if (i < g_lista_parametros_atual.size() - 1) {
+                           prototipo_c += ", ";
+                       }
+                   }
+                   prototipo_c += ");\n";
+                   declaracoes_globais.push_back(prototipo_c);
+               }
+               ;
+
+LISTA_PARAM_PROTOTIPO : /* Vazio */ { g_lista_parametros_atual.clear(); }
+                      | LISTA_PARAM_PROTOTIPO_NON_EMPTY
+                      ;
+
+LISTA_PARAM_PROTOTIPO_NON_EMPTY : TK_TYPE_SPECIFIER TK_ID
+								{
+									// Apenas captura o primeiro parâmetro (ex: "int n1")
+									g_lista_parametros_atual.clear();
+									g_lista_parametros_atual.push_back({$1.label, $2.label});
+									// NADA MAIS AQUI!
+								}
+                                | LISTA_PARAM_PROTOTIPO_NON_EMPTY ',' TK_TYPE_SPECIFIER TK_ID
+                                {
+                                    // Apenas captura os parâmetros subsequentes (ex: ", int n2")
+    								g_lista_parametros_atual.push_back({$3.label, $4.label});	
+                                }
+                                ;
+
+// Regra principal para uma lista de definições de função
+LISTA_FUNCOES : /* Vazio */ { $$.traducao = ""; }
+              | LISTA_FUNCOES DEFINICAO_FUNC
+              {
+                  // Apenas concatena os corpos das funções traduzidos
+                  $$.traducao = $1.traducao + $2.traducao;
+              }
+              ;
+
+// REGRA 1 (Final): Monta a função após o corpo ser processado
+DEFINICAO_FUNC : PROCESSA_CABECA_FUNC BLOCO
+                 {
+                     string nome_func_c = g_funcao_atual->label;
+                     string corpo_traduzido = $2.traducao;
+                     
+                     string definicao_completa = g_corpos_funcoes_traduzidos[nome_func_c];
+                     
+                     for(const auto& decl : declaracoes_locais) {
+                         definicao_completa += decl;
+                     }
+                     declaracoes_locais.clear();
+                     
+                     definicao_completa += corpo_traduzido;
+                     definicao_completa += "}\n";
+                     
+                     g_corpos_funcoes_traduzidos[nome_func_c] = definicao_completa;
+                     $$.traducao = definicao_completa;
+
+                     retirarEscopo();
+                     g_funcao_atual = nullptr;
+                 }
+                 ;
+
+// REGRA 2 (Chave da solução): Processa o cabeçalho ANTES do corpo
+PROCESSA_CABECA_FUNC : TK_TYPE_SPECIFIER TK_DEF TK_ID '(' LISTA_PARAM_DEF ')'
+                     {
+                         // 1. VALIDA O CABEÇALHO NO ESCOPO PAI (GLOBAL)
+                         string nome_ghp = $3.label;
+                         if (!verificar(nome_ghp)) {
+                             yyerror("Erro Semantico: Funcao '" + nome_ghp + "' definida sem prototipo previo.");
+                         }
+                         
+                         // Usamos uma referência para modificar o símbolo global diretamente
+                         Simbolo& s_global = tabela[0].at(nome_ghp);
+                         if (!s_global.is_function) yyerror("Erro Semantico: '" + nome_ghp + "' nao eh uma funcao.");
+                         if (s_global.corpo_definido) yyerror("Erro Semantico: Redefinicao da funcao '" + nome_ghp + "'.");
+                         
+                         // Validações de consistência (tipo de retorno, número de params, etc.)
+                         if (s_global.tipo_retorno != $1.label) yyerror("Erro Semantico: Tipo de retorno inconsistente para '" + nome_ghp + "'.");
+                         if (s_global.parametros.size() != g_lista_parametros_atual.size()) yyerror("Erro Semantico: Numero de parametros inconsistente para '" + nome_ghp + "'.");
+
+                         // 2. CRIA O NOVO ESCOPO LOCAL DA FUNÇÃO
+                         adicionarEscopo();
+
+                         // Prepara a string da assinatura da função C para a geração de código
+                         string definicao_c_assinatura;
+                         string tipo_retorno_c = $1.label;
+                         definicao_c_assinatura += tipo_retorno_c + " " + s_global.label + "(";
+
+                         // 3. ADICIONA OS PARÂMETROS AO NOVO ESCOPO LOCAL USANDO SUAS FUNÇÕES
+                         for(size_t i = 0; i < g_lista_parametros_atual.size(); i++) {
+                             string p_tipo = g_lista_parametros_atual[i].first;
+                             string p_nome = g_lista_parametros_atual[i].second;
+
+                             if (s_global.parametros[i].nome_original != p_nome) {
+                                 yyerror("Erro Semantico: Nome do parametro '" + p_nome + "' eh inconsistente com o prototipo.");
+                             }
+                             
+							// --- LÓGICA CHAVE RESTAURADA ---
+							// a) Cria o símbolo para o parâmetro (ex: 'n1') no escopo ATUAL.
+							adicionarSimbolo(p_nome);
+
+							// b) ATUALIZA o símbolo que acabamos de adicionar, definindo seu tipo.
+							atualizar(p_tipo, p_nome, "", "", "", "", "", false);
+							
+                             // c) Pega o label C gerado por adicionarSimbolo (ex: t5) para usar na assinatura C
+                             Simbolo param_s_atualizado = buscar(p_nome);
+                             s_global.parametros[i].label_c = param_s_atualizado.label;
+
+                             // Monta a string da assinatura
+                             string tipo_param_c = (p_tipo == "string") ? "char*" : (p_tipo == "bool" ? "int" : p_tipo);
+                             definicao_c_assinatura += tipo_param_c + " " + param_s_atualizado.label;
+                             if (i < g_lista_parametros_atual.size() - 1) definicao_c_assinatura += ", ";
+                         }
+                         definicao_c_assinatura += ") {\n";
+                         
+                         // Armazena a assinatura para a montagem final da função
+                         g_corpos_funcoes_traduzidos[s_global.label] = definicao_c_assinatura;
+                         
+                         // Marca o corpo como definido e aponta para a função atual
+                         s_global.corpo_definido = true;
+                         g_funcao_atual = &s_global;
+                     }
+                     ;
+
+// Regra para coletar os parâmetros da definição
+LISTA_PARAM_DEF : /* Vazio */ { g_lista_parametros_atual.clear(); }
+                | LISTA_PARAM_DEF_NON_EMPTY
+                ;
+
+// VERSÃO CORRIGIDA
+LISTA_PARAM_DEF_NON_EMPTY : TK_TYPE_SPECIFIER TK_ID
+							{
+								g_lista_parametros_atual.clear();
+								g_lista_parametros_atual.push_back({$1.label, $2.label});
+							}
+							| LISTA_PARAM_DEF_NON_EMPTY ',' TK_TYPE_SPECIFIER TK_ID
+							{
+								g_lista_parametros_atual.push_back({$3.label, $4.label});
+							}
+                            ;
 BLOCO		: '{'{ adicionarEscopo();} COMANDOS '}'
 			{
 				$$.traducao = $3.traducao;
@@ -528,7 +720,34 @@ COMANDO 	: E ';'
 
 				atualizar($$.tipo, $3.label, $$.tamanho, cat, simbolo1.label, "", "", false); 
 			}
-			;
+			| TK_RETURN ';'
+            {
+                if (!g_funcao_atual) {
+                    yyerror("Erro Semantico: 'return' fora de uma funcao.");
+                }
+                if (g_funcao_atual->tipo_retorno != "void") { // Supondo 'void'
+                    yyerror("Erro Semantico: Funcao '" + g_funcao_atual->label + "' deve retornar um valor.");
+                }
+                $$.traducao = "\treturn;\n";
+            }
+            | TK_RETURN E ';'
+            {
+                if (!g_funcao_atual) {
+                    yyerror("Erro Semantico: 'return' fora de uma funcao.");
+                }
+                if (g_funcao_atual->tipo_retorno == "void") {
+                    yyerror("Erro Semantico: Funcao '" + g_funcao_atual->label + "' eh do tipo void e nao pode retornar valor.");
+                }
+                // Validação de tipo entre o retorno da função e a expressão
+                if (tipofinal[g_funcao_atual->tipo_retorno][$2.tipo] == "erro") {
+                    yyerror("Erro Semantico: Tipo de retorno incompátivel na funcao '" + g_funcao_atual->label + "'.");
+                }
+                
+                // Adicionar cast se necessário
+                
+                $$.traducao = $2.traducao + "\treturn " + $2.label + ";\n";
+            }
+            ;
 
 INTERMEDIARIO_FOR: TK_ID '=' E
 			{
@@ -702,6 +921,7 @@ ATRI 		:TK_ID '=' E
 				traducaoTemp = "";
 
 				if(!verificar($1.label)) {
+					cout << $1.label << endl;
 					yyerror("Variavel nao foi declarada.");
 				}
 
@@ -1253,8 +1473,10 @@ E 			: '(' E ')'
                 }
 
                 variavel = buscar($1.label);
-                if(variavel.tipo == "") yyerror("Variavel ainda nao possui tipo");
-
+                if(variavel.tipo == "" && variavel.is_function == false) 
+				{
+					yyerror("Variavel ainda nao possui tipo");
+				}
                 $$.label = variavel.label;
                 $$.traducao = "";
                 $$.tipo = variavel.tipo;
@@ -1386,7 +1608,71 @@ E 			: '(' E ')'
             $$.traducao += "\t" + $$.label + " = " + s.label + "[" + temp_index + "];\n";
 			}
 			| OPERADORES_UNARIOS
+			| TK_ID '(' LISTA_ARGS ')'
+            {
+                string nome_func = $1.label;
+                if (!verificar(nome_func)) {
+                    yyerror("Erro Semantico: Funcao '" + nome_func + "' nao declarada.");
+                }
+
+                Simbolo s = buscar(nome_func);
+                if (!s.is_function) {
+                    yyerror("Erro Semantico: '" + nome_func + "' nao eh uma funcao.");
+                }
+
+                vector<atributos> args = g_current_flat_initializer; // Reutilizando a lista global
+
+                if (s.parametros.size() != args.size()) {
+                    yyerror("Erro Semantico: Numero incorreto de argumentos para a funcao '" + nome_func + "'.");
+                }
+                
+                $$.traducao = "";
+                string args_code;
+                string args_labels;
+
+                for (size_t i = 0; i < args.size(); ++i) {
+                    // Validação de tipo e cast se necessário
+                    if (tipofinal[s.parametros[i].tipo][args[i].tipo] == "erro") {
+                         yyerror("Erro Semantico: Tipo do argumento " + to_string(i+1) + " incomp compativel com o parametro da funcao '" + nome_func + "'.");
+                    }
+                    // Adicione lógica de cast implícito aqui se necessário
+                    
+                    $$.traducao += args[i].traducao;
+                    args_labels += args[i].label;
+                    if (i < args.size() - 1) {
+                        args_labels += ", ";
+                    }
+                }
+                
+                $$.tipo = s.tipo_retorno;
+                if ($$.tipo != "void") { // Assumindo 'void' se a função não retorna nada
+                    $$.label = gentempcode();
+                    declarar($$.tipo, $$.label, -1);
+                    $$.traducao += "\t" + $$.label + " = " + s.label + "(" + args_labels + ");\n";
+                } else {
+                    $$.label = "";
+                    $$.traducao += "\t" + s.label + "(" + args_labels + ");\n";
+                }
+            }
             ;
+
+// Regra para capturar argumentos
+LISTA_ARGS  : /* Vazio */ { g_current_flat_initializer.clear(); }
+            | LISTA_ARGS_NON_EMPTY
+            ;
+            
+LISTA_ARGS_NON_EMPTY : E
+                     {
+                         g_current_flat_initializer.clear();
+                         g_current_flat_initializer.push_back($1);
+						 
+                     }
+                     | LISTA_ARGS_NON_EMPTY ',' E
+                     {
+                         g_current_flat_initializer.push_back($3);
+                     }
+                     ;
+            
 OPERADORES_UNARIOS : TK_ID TK_INC
 					{
 						// Pós-incremento: a++

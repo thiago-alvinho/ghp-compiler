@@ -1,11 +1,15 @@
-def main {
-    var matriz[2][2] = {"luiz,", "trouxe", "o", "cafe?"};
-    var i;
-    var j;
+int def fatorial(int n);
 
-    for(i = 0; i < 2; i++) {
-        for(j = 0; j < 2; j++) {
-            output(matriz[i][j], " ");
-        }
+def main {
+    var resultadoFatorial;
+    resultadoFatorial = fatorial(5);
+    output(resultadoFatorial);
+}
+
+int def fatorial(int n) {
+    if (n == 0) then {
+        return 1;
+    } else {
+        return n * fatorial(n - 1);
     }
 }

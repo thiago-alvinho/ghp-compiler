@@ -657,8 +657,7 @@ COMANDO 	: E ';'
 					"\tfgets(" + buffer + ", 256, stdin);\n" +
 					string_intermediario(buffer, tamanho, cond, label) +
 					"\t" + temp_ponteiro + " = malloc(" + tamanho + ");\n" +
-					"\tstrcpy(" + temp_ponteiro + ", " + buffer + ");\n" +
-					"\tfree(" + buffer + ");\n";
+					"\tstrcpy(" + temp_ponteiro + ", " + buffer + ");\n";
 
 					$$.label = temp_ponteiro;
 				}
@@ -2031,7 +2030,7 @@ string string_intermediario(string buffer, string tamanho, string cond, string l
     string temp = gentempcode();
 	declarar("char", temp, -1);
     string saida = "";
-	saida += "\n\t" + tamanho + " = 0;\n"; // Inicializa o contador de tamanho
+	saida += "\n\t" + tamanho + " = 1;\n"; // Inicializa o contador de tamanho
 	saida += "\t" + label + ":\n"; // Rótulo de início do loop
 	saida += "\t\t" + temp + " = *" + buffer + ";\n"; // Pega o caractere atual
 	saida += "\t\t" + buffer + " = " + buffer + " + 1;\n";

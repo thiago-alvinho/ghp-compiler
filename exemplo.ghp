@@ -1,16 +1,5 @@
-int def fatorial(int n);
-
-def main {
-    var resultadoFatorial;
-    resultadoFatorial = fatorial(5);
-    output(resultadoFatorial);
-}
-
-int def fatorial(int n) {
-    if (n == 0) then {
-        return 1;
-    } else {
-        return n * fatorial(n - 1);
-    }
-
+def main{
+    var a;
+    a = input(%s);
+    output(a);
 }
